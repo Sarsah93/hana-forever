@@ -1,0 +1,32 @@
+@'
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+*.spec
+
+# Node
+node_modules/
+.vite/
+
+# Build output
+dist/
+build/
+
+# Rust / Tauri
+target/
+src-tauri/target/
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Env
+.env
+.env.local
+'@ | Set-Content -Encoding utf8 .gitignore

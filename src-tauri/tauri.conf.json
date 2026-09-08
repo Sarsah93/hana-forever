@@ -1,0 +1,9 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Hana Forever",
+  "version": "0.1.0",
+  "identifier": "com.hanaforever.desktop",
+  "build": { "beforeDevCommand": "npm run dev", "beforeBuildCommand": "npm run build", "devUrl": "http://localhost:1420", "frontendDist": "../dist" },
+  "app": { "windows": [{ "label": "main", "title": "Hana Forever", "width": 270, "height": 300, "decorations": false, "transparent": true, "alwaysOnTop": true, "resizable": false, "skipTaskbar": true }] },
+  "bundle": { "active": true, "targets": "nsis", "icon": [] }
+}

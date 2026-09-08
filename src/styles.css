@@ -1,0 +1,18 @@
+:root { color: #3d261b; font-family: ui-rounded, "Segoe UI", sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; overflow: hidden; background: transparent; }
+.mascot { width: 270px; height: 300px; position: relative; user-select: none; }
+.sprite-stage { height: 245px; display: grid; place-items: center; transform-origin: 50% 100%; }
+.sprite-image { width: 238px; height: 238px; object-fit: contain; filter: drop-shadow(0 12px 8px #27120966); }
+.placeholder-pup { font-size: 128px; filter: drop-shadow(0 12px 8px #27120966); transition: transform 120ms ease; }
+.placeholder-pup[data-action="jump"] { animation: leap 310ms ease-out infinite alternate; }
+.placeholder-pup[data-action="shake"] { animation: shake 85ms linear infinite; }
+.placeholder-pup[data-action="sleep-curled"], .placeholder-pup[data-action="rest-curled"] { transform: scale(.82) rotate(-18deg) !important; }
+#missing-asset { position: absolute; inset: auto 12px 5px; margin: 0; text-align: center; font-size: 11px; color: #624b3e; }
+.handle { position: absolute; left: 50%; bottom: 3px; translate: -50% 0; border: 0; border-radius: 99px; padding: 5px 13px; background: #fff9f2cc; color: #513528; cursor: grab; opacity: .18; }
+.handle:hover { opacity: 1; }.handle:active { cursor: grabbing; }
+.control-panel { position: fixed; z-index: 2; left: 8px; top: 8px; width: 254px; padding: 10px; border: 1px solid #fff7ec; border-radius: 14px; background: #fffcf7e8; box-shadow: 0 7px 22px #4b241b2b; font-size: 11px; }
+.title-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }.title-row button { font-size: 10px; }
+.action-grid { display: flex; flex-wrap: wrap; gap: 4px; }.action-grid button, .title-row button { border: 1px solid #d8b9a3; border-radius: 6px; background: #fff; color: #54362a; padding: 4px 6px; cursor: pointer; }
+.action-grid button:hover, .title-row button:hover { background: #f7e6d7; }
+@keyframes leap { to { translate: 0 -44px; } } @keyframes shake { 25% { rotate: -5deg; } 75% { rotate: 5deg; } }
