@@ -8,11 +8,14 @@ import { defineConfig, type Plugin } from "vite";
  * the copy so shipped builds only carry runtime sprites.
  */
 function stripAuthoringAssets(): Plugin {
+  let outDir = "dist";
   return {
     name: "hana-strip-authoring-assets",
     apply: "build",
+    configResolved(config) {
+      outDir = resolve(config.root, config.build.outDir);
+    },
     async closeBundle() {
-      const outDir = resolve(import.meta.dirname, "dist");
       for (const entry of ["_review", "README.md"]) {
         await rm(resolve(outDir, entry), { recursive: true, force: true });
       }
