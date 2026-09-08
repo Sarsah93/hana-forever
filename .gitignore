@@ -1,13 +1,3 @@
-@'
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-.venv/
-venv/
-env/
-*.spec
-
 # Node
 node_modules/
 .vite/
@@ -19,6 +9,19 @@ build/
 # Rust / Tauri
 target/
 src-tauri/target/
+src-tauri/gen/schemas/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+*.spec
+
+# Local tooling install (pip target, not project source)
+tools/imagegen-python/
 
 # OS / Editor
 .DS_Store
@@ -29,4 +32,3 @@ Thumbs.db
 # Env
 .env
 .env.local
-'@ | Set-Content -Encoding utf8 .gitignore
