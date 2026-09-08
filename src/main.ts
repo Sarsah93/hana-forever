@@ -21,9 +21,16 @@ app.innerHTML = `
     </div>
     <button class="handle" id="drag-handle" aria-label="하나 이동하기">하나</button>
   </section>
-  <aside class="control-panel" aria-label="개발용 행동 선택">
-    <div class="title-row"><strong>HANA / dev</strong><button id="click-through">클릭 통과: 끔</button></div>
+  <aside class="control-panel" id="control-panel" aria-label="행동 선택 패널" hidden>
+    <div class="title-row">
+      <strong>HANA</strong>
+      <span class="title-buttons">
+        <button id="click-through">클릭 통과: 끔</button>
+        <button id="quit">종료</button>
+      </span>
+    </div>
     <div class="action-grid" id="actions"></div>
+    <p class="panel-hint">F2로 여닫기 · 트레이 아이콘에서도 조작할 수 있습니다</p>
   </aside>`;
 
 const actionGrid = document.querySelector<HTMLDivElement>("#actions")!;
@@ -33,6 +40,24 @@ for (const id of ACTION_IDS) {
   button.onclick = () => machine.transition(id, ACTIONS[id].facing[0]);
   actionGrid.append(button);
 }
+
+/** The panel covers the mascot, so shipped builds start with it closed. F2 and the tray reopen it. */
+const panel = document.querySelector<HTMLElement>("#control-panel")!;
+panel.hidden = !import.meta.env.DEV;
+const debugLabel = document.querySelector<HTMLParagraphElement>("#missing-asset")!;
+debugLabel.hidden = panel.hidden;
+const togglePanel = () => {
+  panel.hidden = !panel.hidden;
+  debugLabel.hidden = panel.hidden;
+};
+window.addEventListener("keydown", (event) => {
+  if (event.key !== "F2") return;
+  event.preventDefault();
+  togglePanel();
+});
+void bridge.onTogglePanel(togglePanel);
+
+document.querySelector<HTMLButtonElement>("#quit")!.onclick = () => void bridge.quit();
 
 const clickThroughButton = document.querySelector<HTMLButtonElement>("#click-through")!;
 clickThroughButton.onclick = async () => {
@@ -68,7 +93,7 @@ function render(now: number) {
   mascotImage.hidden = !sprite;
   placeholder.hidden = Boolean(sprite);
   if (sprite && mascotImage.src !== new URL(sprite.src, window.location.origin).href) mascotImage.src = sprite.src;
-  document.querySelector<HTMLParagraphElement>("#missing-asset")!.textContent = sprite
+  debugLabel.textContent = sprite
     ? `${action} / ${facing} (${sprite.frameCount}f @ ${sprite.fps}fps)`
     : `${action} / ${facing} — 스프라이트 미등록`;
   if (Math.abs(motion.velocityX) > 0.1) void bridge.moveBy(motion.velocityX * dt, 0);
