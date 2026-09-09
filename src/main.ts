@@ -1,102 +1,128 @@
 import "./styles.css";
-import { ACTION_IDS, ACTIONS, type ActionId } from "./domain/actions";
-import { MascotMachine } from "./domain/mascot-machine";
-import { integrateMotion, type MotionState } from "./domain/motion";
-import { findSprite } from "./assets/manifest";
-import { getWindowBridge } from "./platform/window";
-
+import { DesktopController, type DesktopAction } from "./domain/desktop-controller";
+import { STEP } from "./domain/motion";
+import type { Facing } from "./domain/actions";
+import { findSprite, frameIndex, SPRITES } from "./assets/manifest";
+import { ANCHOR, getWindowBridge, inTauri, previewScene, WINDOW_SIZE } from "./platform/window";
+const native = inTauri();
 const app = document.querySelector<HTMLDivElement>("#app")!;
-const machine = new MascotMachine();
-const bridge = getWindowBridge();
-let motion: MotionState = { x: 0, y: 0, velocityX: 0, velocityY: 0 };
-let last = performance.now();
-let clickThrough = false;
-
 app.innerHTML = `
-  <section class="mascot" aria-label="하나 데스크톱 마스코트">
-    <div class="sprite-stage" id="sprite-stage">
-      <img class="sprite-image" id="mascot-image" alt="두 발로 서서 앞발을 내민 하나" hidden />
-      <div class="placeholder-pup" aria-hidden="true">🐩</div>
-      <p id="missing-asset">첫 스프라이트를 기다리는 하나</p>
-    </div>
-    <button class="handle" id="drag-handle" aria-label="하나 이동하기">하나</button>
-  </section>
-  <aside class="control-panel" id="control-panel" aria-label="행동 선택 패널" hidden>
-    <div class="title-row">
-      <strong>HANA</strong>
-      <span class="title-buttons">
-        <button id="click-through">클릭 통과: 끔</button>
-        <button id="quit">종료</button>
-      </span>
-    </div>
+  <div id="preview-world" hidden><div id="browser-obstacle"><span>브라우저 창 · 충돌 확인</span></div><div id="taskbar">작업 표시줄 · 발이 닿는 바닥</div></div>
+  <section class="mascot" aria-label="하나 데스크톱 마스코트"><canvas id="mascot-canvas" width="256" height="256" aria-label="하나 · 드래그로 옮기기, 더블클릭으로 점프" tabindex="0"></canvas></section>
+  <aside class="control-panel" id="control-panel" hidden aria-label="하나 행동 패널">
+    <div class="title-row"><strong>하나</strong><button id="close-panel" aria-label="패널 닫기">×</button></div>
     <div class="action-grid" id="actions"></div>
-    <p class="panel-hint">F2로 여닫기 · 트레이 아이콘에서도 조작할 수 있습니다</p>
-  </aside>`;
-
-const actionGrid = document.querySelector<HTMLDivElement>("#actions")!;
-for (const id of ACTION_IDS) {
-  const button = document.createElement("button");
-  button.textContent = id;
-  button.onclick = () => machine.transition(id, ACTIONS[id].facing[0]);
-  actionGrid.append(button);
-}
-
-/** The panel covers the mascot, so shipped builds start with it closed. F2 and the tray reopen it. */
+    <label><input type="checkbox" id="auto" checked /> 스스로 돌아다니기</label>
+    <div class="action-grid"><button id="reset">바닥으로</button><button id="click-through">클릭 통과</button><button id="quit">종료</button></div>
+    <p>← → 걷기 · Space 점프 · F2 패널<br>하나 드래그 · 더블클릭 점프</p><output id="status" aria-live="polite"></output>
+  </aside><p id="error" role="alert" hidden></p>`;
+const errorBox = document.querySelector<HTMLElement>("#error")!;
+const reportError = (error: unknown) => { console.error(error); errorBox.hidden = false; errorBox.textContent = `하나를 준비하지 못했어요: ${String(error)}`; };
+const bridge = getWindowBridge(reportError);
 const panel = document.querySelector<HTMLElement>("#control-panel")!;
-panel.hidden = !import.meta.env.DEV;
-const debugLabel = document.querySelector<HTMLParagraphElement>("#missing-asset")!;
-debugLabel.hidden = panel.hidden;
-const togglePanel = () => {
-  panel.hidden = !panel.hidden;
-  debugLabel.hidden = panel.hidden;
-};
-window.addEventListener("keydown", (event) => {
-  if (event.key !== "F2") return;
-  event.preventDefault();
-  togglePanel();
-});
-void bridge.onTogglePanel(togglePanel);
-
-document.querySelector<HTMLButtonElement>("#quit")!.onclick = () => void bridge.quit();
-
-const clickThroughButton = document.querySelector<HTMLButtonElement>("#click-through")!;
-clickThroughButton.onclick = async () => {
-  clickThrough = !clickThrough;
-  await bridge.setIgnoreCursor(clickThrough);
-  clickThroughButton.textContent = `클릭 통과: ${clickThrough ? "켬" : "끔"}`;
-};
-
+const mascot = document.querySelector<HTMLElement>(".mascot")!;
+const canvas = document.querySelector<HTMLCanvasElement>("#mascot-canvas")!;
+const ctx = canvas.getContext("2d")!;
+const status = document.querySelector<HTMLElement>("#status")!;
+const auto = document.querySelector<HTMLInputElement>("#auto")!;
+const world = document.querySelector<HTMLElement>("#preview-world")!;
+const images = new Map<string, HTMLImageElement>();
+let controller: DesktopController;
 let dragging = false;
-let previousPointer: { x: number; y: number } | undefined;
-const handle = document.querySelector<HTMLButtonElement>("#drag-handle")!;
-handle.addEventListener("pointerdown", (event) => { dragging = true; previousPointer = { x: event.screenX, y: event.screenY }; handle.setPointerCapture(event.pointerId); });
-handle.addEventListener("pointermove", async (event) => {
-  if (!dragging || !previousPointer) return;
-  await bridge.moveBy(event.screenX - previousPointer.x, event.screenY - previousPointer.y);
-  previousPointer = { x: event.screenX, y: event.screenY };
-});
-handle.addEventListener("pointerup", () => { dragging = false; previousPointer = undefined; });
-
-function render(now: number) {
-  const dt = Math.min((now - last) / 1000, 0.05); last = now;
-  machine.tick(now);
-  const { action, facing } = machine.state;
-  motion = integrateMotion(motion, action, facing, dt);
-  const sprite = findSprite(action, facing);
-  const stage = document.querySelector<HTMLDivElement>("#sprite-stage")!;
-  stage.style.transform = `translate3d(0, ${motion.y}px, 0)`;
-  const placeholder = stage.querySelector<HTMLElement>(".placeholder-pup")!;
-  const mascotImage = stage.querySelector<HTMLImageElement>("#mascot-image")!;
-  placeholder.dataset.action = action;
-  placeholder.dataset.facing = facing;
-  placeholder.style.transform = `scaleX(${facing === "left" ? -1 : 1})`;
-  mascotImage.hidden = !sprite;
-  placeholder.hidden = Boolean(sprite);
-  if (sprite && mascotImage.src !== new URL(sprite.src, window.location.origin).href) mascotImage.src = sprite.src;
-  debugLabel.textContent = sprite
-    ? `${action} / ${facing} (${sprite.frameCount}f @ ${sprite.fps}fps)`
-    : `${action} / ${facing} — 스프라이트 미등록`;
-  if (Math.abs(motion.velocityX) > 0.1) void bridge.moveBy(motion.velocityX * dt, 0);
-  requestAnimationFrame(render);
+let pointer: { x: number; y: number } | undefined;
+let last = performance.now(), accumulator = 0;
+let clickThrough = false;
+let heldArrow: string | undefined;
+function manual(action: DesktopAction, facing: Facing = "front") {
+  if (!controller) return;
+  controller.autonomous = false; auto.checked = false;
+  if (!controller.request(action, facing)) status.textContent = action === "lean" ? "창 옆에 닿은 상태에서 기대요." : "착지한 뒤 다시 해볼게요.";
 }
-requestAnimationFrame(render);
+for (const [label, action, facing] of [
+  ["쉬기", "idle-stand", "front"], ["두 발 서기", "stand-up", "front"], ["← 걷기", "walk", "left"], ["걷기 →", "walk", "right"],
+  ["← 빠르게", "run", "left"], ["빠르게 →", "run", "right"], ["점프", "jump", "front"],
+  ["← 기대기", "lean", "left"], ["기대기 →", "lean", "right"]] as const) {
+  const button = document.createElement("button"); button.textContent = label;
+  button.onclick = () => manual(action, facing); document.querySelector("#actions")!.append(button);
+}
+auto.onchange = () => { if (controller) controller.autonomous = auto.checked; };
+async function togglePanel() {
+  if (clickThrough) { await bridge.setIgnoreCursor(false); clickThrough = false; }
+  panel.hidden = !panel.hidden;
+}
+document.querySelector<HTMLButtonElement>("#close-panel")!.onclick = () => { panel.hidden = true; };
+document.querySelector<HTMLButtonElement>("#reset")!.onclick = () => controller?.reset();
+document.querySelector<HTMLButtonElement>("#quit")!.onclick = () => { void bridge.quit().catch(reportError); };
+document.querySelector<HTMLButtonElement>("#click-through")!.onclick = async () => {
+  try { await bridge.setIgnoreCursor(true); clickThrough = true; panel.hidden = true; } catch (error) { reportError(error); }
+};
+window.addEventListener("keydown", e => {
+  if ((e.target as HTMLElement)?.matches("input")) return;
+  if (e.key === "F2") { e.preventDefault(); void togglePanel().catch(reportError); }
+  if (e.code === "Space" && !e.repeat) { e.preventDefault(); manual("jump"); }
+  if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+    e.preventDefault(); if (!e.repeat) { heldArrow = e.key; manual("walk", e.key === "ArrowLeft" ? "left" : "right"); }
+  }
+});
+window.addEventListener("keyup", e => {
+  if (e.key === heldArrow) { heldArrow = undefined; if (controller?.action === "walk") controller.request("idle-stand"); }
+});
+window.addEventListener("blur", () => { if (heldArrow && controller?.action === "walk") controller.request("idle-stand"); heldArrow = undefined; });
+canvas.addEventListener("dblclick", () => manual("jump"));
+canvas.addEventListener("contextmenu", e => { e.preventDefault(); void togglePanel().catch(reportError); });
+canvas.addEventListener("pointerdown", e => {
+  if (e.button !== 0 || !controller) return;
+  dragging = true; pointer = { x: e.screenX, y: e.screenY }; canvas.setPointerCapture(e.pointerId); canvas.focus();
+  controller.motion.velocityX = controller.motion.velocityY = 0;
+});
+canvas.addEventListener("pointermove", e => {
+  if (!dragging || !pointer) return;
+  const scale = controller.scene.scaleFactor;
+  controller.motion.x += (e.screenX - pointer.x) * scale;
+  controller.motion.y += (e.screenY - pointer.y) * scale;
+  pointer = { x: e.screenX, y: e.screenY };
+});
+function release() { if (!dragging) return; dragging = false; pointer = undefined; controller.drop(controller.motion.x, controller.motion.y); }
+canvas.addEventListener("pointerup", release); canvas.addEventListener("pointercancel", release); canvas.addEventListener("lostpointercapture", release);
+function draw() {
+  const { motion, action, facing, age, scene } = controller;
+  const clip = findSprite(action, facing), frame = clip.frames[frameIndex(action, age, motion.velocityY / scene.scaleFactor)];
+  const dpr = devicePixelRatio || 1;
+  if (canvas.width !== Math.round(WINDOW_SIZE * dpr)) { canvas.width = canvas.height = Math.round(WINDOW_SIZE * dpr); }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, WINDOW_SIZE, WINDOW_SIZE);
+  ctx.save(); ctx.translate(ANCHOR.x, ANCHOR.y); ctx.scale(clip.mirror ? -1 : 1, 1);
+  const [sx, sy, sw, sh] = frame.rect, [fx, fy] = frame.foot;
+  ctx.drawImage(images.get(clip.src)!, sx, sy, sw, sh, (sx - fx) * clip.scale, (sy - fy) * clip.scale, sw * clip.scale, sh * clip.scale);
+  ctx.restore();
+  const x = motion.x - ANCHOR.x * scene.scaleFactor, y = motion.y - ANCHOR.y * scene.scaleFactor;
+  if (native) bridge.position(x, y); else mascot.style.transform = `translate(${x}px, ${y}px)`;
+  mascot.dataset.action = action; mascot.dataset.grounded = String(motion.grounded);
+  if (!panel.hidden) status.textContent = `${action} · ${facing} · ${motion.grounded ? "접지" : "공중"}`;
+}
+function render(now: number) {
+  accumulator += Math.min((now - last) / 1000, .1); last = now;
+  while (accumulator >= STEP) { if (!dragging) controller.tick(STEP); accumulator -= STEP; }
+  draw(); requestAnimationFrame(render);
+}
+function drawPreview() {
+  const scene = previewScene(), o = scene.obstacles[0];
+  const b = document.querySelector<HTMLElement>("#browser-obstacle")!;
+  Object.assign(b.style, { left: `${o.left}px`, top: `${o.top}px`, width: `${o.right-o.left}px`, height: `${o.bottom-o.top}px` });
+}
+async function refreshScene() {
+  try { const scene = await bridge.scene(); if (!dragging) controller.setScene(scene); }
+  catch (error) { reportError(error); }
+  window.setTimeout(() => void refreshScene(), 250);
+}
+async function start() {
+  await Promise.all([...new Set(SPRITES.map(c => c.src))].map(async src => {
+    const image = new Image(); image.src = src; await image.decode(); images.set(src, image);
+  }));
+  controller = new DesktopController(await bridge.scene());
+  if (!native) { world.hidden = false; panel.hidden = false; document.body.classList.add("preview"); drawPreview(); }
+  await bridge.onEvent("hana://toggle-panel", () => { clickThrough = false; void togglePanel().catch(reportError); });
+  await bridge.onEvent("hana://reset", () => { clickThrough = false; controller.reset(); });
+  window.addEventListener("resize", () => { if (!native) { controller.setScene(previewScene()); drawPreview(); } });
+  last = performance.now(); requestAnimationFrame(render); void refreshScene();
+}
+void start().catch(reportError);

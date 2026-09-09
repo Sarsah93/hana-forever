@@ -32,3 +32,16 @@
 2. 걷기/달리기·점프를 넣고 Rust에서 화면 작업 영역 충돌과 다중 모니터 좌표를 처리한다.
 3. 전역 마우스 거리와 활성 창 가장자리를 이벤트 소스로 추가한다. 사용자가 명시적으로 켠 경우에만 추적한다.
 4. SQLite 저장소에 친밀도·기분·인벤토리·퀘스트를 별도 도메인 모듈로 추가한다.
+
+## 2026-09-09: 데스크톱 물리/스프라이트 구현
+
+현재 런타임은 `DesktopController`가 실제 장면과 행동을 묶는다. 기존 `actions.ts`의 13개 의미 ID와 `MascotMachine`은 후속 행동 확장을 위해 보존하지만, 착지 타이밍을 시간 제한만으로 결정하지 않도록 현재 런타임에서 사용하지 않는다.
+
+- `desktop-controller.ts`: 접지/점프/낙하/착지/기대기 및 자율 선택.
+- `motion.ts`: 순수 TypeScript의 물리 픽셀 좌표, AABB, 바닥/창 면 충돌, 겹침 해소.
+- `manifest.ts`: 실제 아틀라스 프레임 rect·발 앵커·재생 타이밍, 물리 단계에 따른 포즈 선택.
+- `main.ts`: 120Hz accumulator와 Canvas 프레임 출력, 사용 가능한 행동 조작.
+- `platform/window.ts`: 브라우저 가상 장면 / Tauri 장면, 절대 위치 IPC 병합.
+- `src-tauri/src/desktop.rs`: Windows 모니터 작업 영역, 열린 창 프레임 및 테두리 억제.
+
+정확한 구현 범위와 예외는 [DESKTOP_MOTION.md](DESKTOP_MOTION.md)에 기록한다.

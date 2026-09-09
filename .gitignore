@@ -32,3 +32,5 @@ Thumbs.db
 # Env
 .env
 .env.local
+
+.test-build/

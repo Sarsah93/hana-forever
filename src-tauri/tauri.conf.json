@@ -14,13 +14,15 @@
       {
         "label": "main",
         "title": "Hana Forever",
-        "width": 270,
-        "height": 300,
+        "width": 256,
+        "height": 256,
         "decorations": false,
         "transparent": true,
         "alwaysOnTop": true,
         "resizable": false,
-        "skipTaskbar": true
+        "skipTaskbar": true,
+        "shadow": false,
+        "backgroundColor": "#00000000"
       }
     ]
   },

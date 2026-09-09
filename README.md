@@ -1,6 +1,6 @@
 # Hana Forever 🐩
 
-갈색 토이푸들 **하나**가 Windows 바탕화면 위에서 걷고, 쉬고, 사용자를 따라다니는 데스크톱 동반자입니다.
+갈색 토이푸들 **하나**가 Windows 작업 표시줄 위에서 걷고, 창에 기대고, 점프 후 다시 착지하는 데스크톱 동반자입니다.
 
 ## 실행
 
@@ -9,21 +9,27 @@ npm install
 npm run tauri dev
 ```
 
-개발 중에는 작은 행동 패널에서 기본 동작을 바로 시험할 수 있습니다. `hana-forever.exe`를 만들려면 다음을 실행합니다.
+`npm run dev`는 브라우저 안의 장애물 미리보기입니다. Windows 데스크톱 창과 작업 표시줄에 실제로 반응하려면 `npm run tauri dev`를 사용하세요.
 
 ```powershell
+npm test
+npm run build
 npm run tauri build
 ```
 
-## 현재 준비된 기반
+빌드 준비와 설치 파일 위치는 [docs/BUILD.md](docs/BUILD.md)에 있습니다.
 
-- 장식 없는 투명·항상 위 Windows 창과 클릭 통과 토글
-- 드래그로 위치 이동, 걷기/달리기/점프의 시간 독립적 움직임
-- 요청한 제자리·좌우 기본 동작 13종의 의미 기반 상태 정의
-- 원본 사진/영상과 배포용 투명 스프라이트를 분리하는 자산 규약
+## 현재 동작
 
-실제 마스코트 렌더링에는 `assets/sprites/README.md`의 규격에 맞춘 투명 스프라이트가 필요합니다. 프레임 작업이 완료되면 `src/assets/manifest.ts`에만 등록하면 됩니다.
+- 테두리·그림자 없는 투명 창, 트레이 메뉴, 클릭 통과 및 복구
+- 작업 표시줄 윗면을 바닥으로 인식하고 좌우 보행
+- 실제 일반 창의 측면 충돌, 윗면 착지, 아랫면 점프 충돌
+- 뒷발을 바닥에 둔 채 창 옆에 두 앞발을 기대기
+- 중력에 따른 1회 점프·낙하·착지, 드래그 후 떨어지기
+- 대기/걷기/기대기/점프·착지 16키포즈 아틀라스, 프레임별 발 앵커
 
-빌드 사전 준비물과 단계별 확인 방법은 [docs/BUILD.md](docs/BUILD.md)에 정리되어 있습니다. Rust를 설치하지 않았다면 GitHub Actions의 `build` 워크플로가 만든 설치 파일을 내려받아 확인할 수 있습니다.
+F2 또는 하나 우클릭으로 패널을 열고, 방향키로 걷기, Space/더블클릭으로 점프합니다. 키보드는 하나 창에 포커스가 있을 때 동작합니다. 트레이에서 바닥 복귀·패널 열기·종료도 할 수 있습니다.
 
-더 자세한 확장 구조와 다음 단계는 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)를 참고하세요.
+이번 아트는 **첫 동작 연결용 키포즈 팩**입니다. 빠른 이동은 걷기 프레임을 재사용하고, 나머지 원래 기획 동작은 후속 제작 대상입니다. 최대화 창처럼 몸이 들어갈 공간이 없을 때는 그 창을 배경으로 취급합니다.
+
+세부 동작, 제약, 검증 항목은 [docs/DESKTOP_MOTION.md](docs/DESKTOP_MOTION.md), 구조는 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), 아트 규약은 [assets/sprites/README.md](assets/sprites/README.md)를 참고하세요.
