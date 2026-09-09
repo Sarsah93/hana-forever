@@ -65,3 +65,11 @@ Windows 수동 확인: 밝은/어두운 바탕에서 사각형 흔적 없음 →
 - [Microsoft MONITORINFO](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-monitorinfo): rcWork 작업 영역.
 - [Microsoft EnumWindows](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-enumwindows): 최상위 창 열거.
 - [Microsoft DWMWINDOWATTRIBUTE](https://learn.microsoft.com/en-us/windows/win32/api/dwmapi/ne-dwmapi-dwmwindowattribute): 화면 프레임, cloaked 필터, 테두리 억제.
+
+## 이번 환경에서 확인한 결과
+
+- 자동 회귀 테스트 15개 통과, `npm run build` 통과, `git diff --check` 통과.
+- [렌더링 미리보기](previews/hana-motion-preview.gif): 실제 `DesktopController`와 매니페스트를 Node Canvas에서 120Hz 물리 / 20fps 출력으로 재생했다. 기대는 동안 앞발-벽과 뒷발-바닥의 접촉, 점프 상승/하강/착지, 투명 스프라이트 외곽을 정지 프레임으로도 검수했다. 이 GIF는 Windows 화면 캡처가 아니라 동일 코드/아트를 사용하는 시뮬레이션이다.
+- 이 Linux 환경에 Rust/Windows 툴체인이 없고 브라우저의 localhost 접속도 차단되어 네이티브 빌드 및 WebView 화면 검증은 완료하지 못했다.
+- GitHub 쓰기는 연결 권한 부족(403)으로 거절됐다. 따라서 원격 브랜치/PR/Actions 실행은 만들지 않았으며, `main`을 전제 커밋으로 하는 Git 번들을 통해 소스와 에셋을 전달한다.
+- 이미지 생성의 실제 요청 전문은 [SPRITE_PROMPT_V2.txt](SPRITE_PROMPT_V2.txt)에 남겼다.

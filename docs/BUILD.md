@@ -58,9 +58,7 @@ npm run tauri build  # 4. 배포용 설치 파일 생성
 
 **창이 투명하지 않거나 뜨지 않음** — WebView2 런타임 누락입니다. 위 4번을 확인하세요.
 
-**빌드는 되는데 하나가 안 보이고 🐩 이모지만 보임** — 정상입니다.
-`src/assets/manifest.ts`에 등록된 스프라이트가 없는 동작은 자리표시자로 표시됩니다.
-`assets/sprites/README.md`의 규격에 맞춰 스프라이트를 만들고 매니페스트에 등록하면 대체됩니다.
+**하나가 보이지 않음** — 행동 팩 로딩에 실패하면 오류 문구가 표시됩니다. `npm run build` 후 `dist/motion-v2/hana-atlas.png`와 `dist/stand-up/front-v1.png`가 있는지 확인하세요. 아직 아트가 없는 기존 기획 동작은 이번 패널에서 제공하지 않습니다.
 
 ## 테스트 배포 (다른 PC에서 써보기)
 
