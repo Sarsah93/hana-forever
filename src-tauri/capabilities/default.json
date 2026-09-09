@@ -1,7 +1,13 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Core desktop mascot window permissions.",
-  "windows": ["main"],
-  "permissions": ["core:default"]
+  "description": "Mascot window and its action panel window.",
+  "windows": [
+    "main",
+    "panel"
+  ],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging"
+  ]
 }

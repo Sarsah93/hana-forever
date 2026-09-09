@@ -2,7 +2,7 @@ name: release
 
 # Tag a commit to publish a test build other people can install:
 #   git tag v0.1.0-test1 && git push origin v0.1.0-test1
-# The installer lands on the Releases page as a public download link.
+# Both the NSIS installer and the portable exe land on the Releases page as a draft.
 on:
   push:
     tags: ["v*"]
@@ -25,28 +25,39 @@ jobs:
         with:
           workspaces: src-tauri -> target
       - run: npm ci
+      - run: npm test
       - run: npm run tauri build
 
-      - name: Publish installer
+      - name: Collect installer and portable exe
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          Copy-Item "src-tauri/target/release/hana-forever.exe" "out/Hana-Forever_${version}_x64-portable.exe"
+          Get-ChildItem "src-tauri/target/release/bundle/nsis/*-setup.exe" | Copy-Item -Destination out/
+          Get-ChildItem out | Format-Table Name, Length
+
+      - name: Publish installer and portable exe
         uses: softprops/action-gh-release@v2
         with:
           draft: true
           name: Hana Forever ${{ github.ref_name }}
           body: |
-            하나 시메지 테스트 빌드입니다.
+            하나 시메지 테스트 빌드입니다. 두 가지 중 하나를 고르세요.
 
-            ## 설치
-            1. 아래 `Hana.Forever_*_x64-setup.exe`를 내려받아 실행합니다.
-            2. 관리자 권한은 필요 없습니다 (현재 사용자에게만 설치).
-            3. WebView2가 없는 PC라면 설치 중 자동으로 함께 설치됩니다.
+            | 파일 | 용도 |
+            | --- | --- |
+            | `Hana Forever_*_x64-setup.exe` | 설치형. 시작 메뉴에 등록되고 관리자 권한 없이 현재 사용자에게만 설치됩니다. WebView2가 없으면 함께 설치합니다. |
+            | `Hana-Forever_*_x64-portable.exe` | 무설치. 아무 폴더에 두고 바로 실행합니다. WebView2 런타임이 있어야 합니다(Windows 11 기본 포함). |
 
             ## 사용
-            - 하나를 드래그하면 옮길 수 있습니다.
-            - **F2**로 행동 패널을 여닫습니다.
-            - 트레이 아이콘 우클릭으로 패널 열기, 화면 중앙으로 데려오기, **종료**를 할 수 있습니다.
+            - 하나를 드래그하면 옮길 수 있고, 머리 위에서 마우스를 문지르면 쓰다듬기입니다.
+            - 하나 **우클릭** 또는 **F2**로 액션 패널을 여닫습니다 (제자리·왼쪽·오른쪽·뒤·교감·설정 탭).
+            - 트레이 아이콘 우클릭: 패널, 작업 표시줄 위로 데려오기, 집중 모드, 알림 시간, **종료**.
 
             ## 참고
-            현재 스프라이트가 등록된 동작은 `idle-stand`와 `stand-up` 두 가지입니다.
-            나머지 동작을 고르면 자리표시자(🐩)가 표시됩니다.
+            하나 몸 위에서만 마우스를 받고 나머지는 바탕화면으로 통과합니다.
+            집중 모드에서 빈 자리가 없으면 숨어 있다가 자리가 나면 돌아옵니다.
           files: |
-            src-tauri/target/release/bundle/nsis/*-setup.exe
+            out/*-setup.exe
+            out/*-portable.exe

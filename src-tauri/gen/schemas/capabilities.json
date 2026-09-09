@@ -1,1 +1,1 @@
-{"default":{"identifier":"default","description":"Core desktop mascot window permissions.","local":true,"windows":["main"],"permissions":["core:default"]}}
+{"default":{"identifier":"default","description":"Mascot window and its action panel window.","local":true,"windows":["main","panel"],"permissions":["core:default","core:window:allow-start-dragging"]}}

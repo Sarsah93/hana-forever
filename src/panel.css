@@ -1,0 +1,23 @@
+:root { font-family: "Segoe UI", "Malgun Gothic", sans-serif; color: #37261e; font-size: 12px; }
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #fffaf5; }
+[hidden] { display: none !important; }
+.control-panel { display: flex; flex-direction: column; width: 100%; height: 100%; border: 1px solid #dccabc; border-radius: 12px; background: #fffaf5; overflow: hidden; }
+.panel-title { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: #f4e6d8; border-bottom: 1px solid #e6d3c2; cursor: grab; user-select: none; }
+.panel-title strong { font-size: 13px; pointer-events: none; }
+.title-buttons { display: flex; gap: 4px; }
+.title-buttons button { padding: 2px 7px; }
+#tracking.on { background: #e0c9b4; border-color: #b58a5e; }
+.tabs { display: flex; gap: 2px; padding: 6px 8px 0; border-bottom: 1px solid #e6d3c2; }
+.tabs button { flex: 1; border: 1px solid transparent; border-bottom: 0; border-radius: 8px 8px 0 0; background: transparent; padding: 5px 2px; color: #7a5a48; }
+.tabs button.active { background: #fff; border-color: #dccabc; color: #37261e; font-weight: 600; }
+.tab { flex: 1; padding: 10px; overflow: auto; }
+.action-grid { display: flex; flex-wrap: wrap; gap: 5px; margin: 4px 0; }
+button { border: 1px solid #dbc1ac; border-radius: 6px; padding: 5px 8px; background: white; color: #513529; cursor: pointer; font: inherit; }
+button:hover:not(:disabled) { background: #f4e2d3; } button:focus-visible { outline: 2px solid #9a6043; } button:disabled { opacity: .5; cursor: default; }
+label { display: block; margin: 6px 0; }
+.times { display: flex; gap: 12px; margin: 8px 0; } .times label { display: flex; align-items: center; gap: 6px; }
+input[type="time"] { font: inherit; padding: 2px 4px; border: 1px solid #dbc1ac; border-radius: 6px; }
+.hint { line-height: 1.5; margin: 8px 0 0; color: #7a5a48; font-size: 11px; }
+footer { padding: 6px 10px; border-top: 1px solid #e6d3c2; display: flex; justify-content: space-between; gap: 8px; font-size: 11px; min-height: 26px; }
+output { color: #805238; } #need { color: #9a6043; }

@@ -14,8 +14,8 @@
       {
         "label": "main",
         "title": "Hana Forever",
-        "width": 256,
-        "height": 256,
+        "width": 320,
+        "height": 300,
         "decorations": false,
         "transparent": true,
         "alwaysOnTop": true,
@@ -23,6 +23,20 @@
         "skipTaskbar": true,
         "shadow": false,
         "backgroundColor": "#00000000"
+      },
+      {
+        "label": "panel",
+        "url": "panel.html",
+        "title": "하나 · 액션 패널",
+        "width": 320,
+        "height": 470,
+        "decorations": false,
+        "resizable": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "shadow": true,
+        "focus": false
       }
     ]
   },

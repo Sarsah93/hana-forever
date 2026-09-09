@@ -6,9 +6,14 @@ on:
   pull_request:
   workflow_dispatch:
 
+# A newer push to the same branch cancels the older run.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   frontend:
-    name: frontend (tsc + vite)
+    name: frontend (test + tsc + vite)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,7 +26,7 @@ jobs:
       - run: npm run build
 
   windows:
-    name: windows installer (tauri build)
+    name: windows (installer + portable exe)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,10 +40,27 @@ jobs:
           workspaces: src-tauri -> target
       - run: npm ci
       - run: npm run tauri build
+
+      # Two deliverables: the NSIS installer and the bare release exe (frontend assets are embedded,
+      # so it runs on its own wherever the WebView2 runtime exists — Windows 11 ships it).
+      - name: Collect installer and portable exe
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          Copy-Item "src-tauri/target/release/hana-forever.exe" "out/Hana-Forever_${version}_x64-portable.exe"
+          Get-ChildItem "src-tauri/target/release/bundle/nsis/*-setup.exe" | Copy-Item -Destination out/
+          Get-ChildItem out | Format-Table Name, Length
+
       - uses: actions/upload-artifact@v4
         with:
-          name: hana-forever-windows
-          path: |
-            src-tauri/target/release/hana-forever.exe
-            src-tauri/target/release/bundle/nsis/*.exe
+          name: hana-forever-setup
+          path: out/*-setup.exe
           if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hana-forever-portable
+          path: out/*-portable.exe
+          if-no-files-found: error
+          retention-days: 30

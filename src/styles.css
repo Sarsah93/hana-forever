@@ -2,18 +2,30 @@
 * { box-sizing: border-box; }
 html, body, #app { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent !important; border: 0; box-shadow: none; }
 [hidden] { display: none !important; }
-.mascot { position: absolute; left: 0; top: 0; width: 256px; height: 256px; user-select: none; }
-#mascot-canvas { display: block; width: 256px; height: 256px; border: 0; outline: 0; background: transparent; box-shadow: none; filter: none; touch-action: none; cursor: grab; }
+.mascot { position: absolute; left: 0; top: 0; width: 320px; height: 300px; user-select: none; }
+#mascot-canvas { display: block; width: 320px; height: 300px; border: 0; outline: 0; background: transparent; box-shadow: none; filter: none; touch-action: none; cursor: grab; }
 #mascot-canvas:active { cursor: grabbing; }
-.control-panel { position: fixed; z-index: 3; left: 6px; top: 6px; width: 244px; padding: 10px; border: 1px solid #dccabc; border-radius: 12px; background: #fffaf5; font-size: 11px; }
-.title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-.action-grid { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
-button { border: 1px solid #dbc1ac; border-radius: 6px; padding: 4px 7px; background: white; color: #513529; cursor: pointer; font: inherit; }
-button:hover { background: #f4e2d3; } button:focus-visible { outline: 2px solid #9a6043; }
-p { line-height: 1.5; margin: 6px 0; } output { color: #805238; }
 #error { position: fixed; z-index: 5; inset: 10px; padding: 10px; background: #fff1e9; color: #9b3024; overflow-wrap: anywhere; }
+/* Browser preview only: the panel is inline here; the native app opens it as its own window. */
+.preview-panel { position: fixed; z-index: 3; right: 12px; top: 12px; width: 320px; height: 470px; font-size: 12px; display: flex; flex-direction: column; border: 1px solid #dccabc; border-radius: 12px; background: #fffaf5; overflow: hidden; box-shadow: 0 6px 24px rgba(60, 40, 20, .18); }
+.preview-panel .panel-title { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: #f4e6d8; border-bottom: 1px solid #e6d3c2; }
+.preview-panel .title-buttons { display: flex; gap: 4px; }
+.preview-panel .tabs { display: flex; gap: 2px; padding: 6px 8px 0; border-bottom: 1px solid #e6d3c2; }
+.preview-panel .tabs button { flex: 1; border: 1px solid transparent; border-bottom: 0; border-radius: 8px 8px 0 0; background: transparent; padding: 5px 2px; color: #7a5a48; }
+.preview-panel .tabs button.active { background: #fff; border-color: #dccabc; color: #37261e; font-weight: 600; }
+.preview-panel .tab { flex: 1; padding: 10px; overflow: auto; }
+.preview-panel .action-grid { display: flex; flex-wrap: wrap; gap: 5px; margin: 4px 0; }
+.preview-panel label { display: block; margin: 6px 0; }
+.preview-panel .times { display: flex; gap: 12px; margin: 8px 0; } .preview-panel .times label { display: flex; align-items: center; gap: 6px; }
+.preview-panel .hint { line-height: 1.5; margin: 8px 0 0; color: #7a5a48; font-size: 11px; }
+.preview-panel footer { padding: 6px 10px; border-top: 1px solid #e6d3c2; display: flex; justify-content: space-between; gap: 8px; font-size: 11px; min-height: 26px; }
+button { border: 1px solid #dbc1ac; border-radius: 6px; padding: 5px 8px; background: white; color: #513529; cursor: pointer; font: inherit; }
+button:hover:not(:disabled) { background: #f4e2d3; } button:focus-visible { outline: 2px solid #9a6043; } button:disabled { opacity: .5; cursor: default; }
+p { line-height: 1.5; margin: 6px 0; } output { color: #805238; }
 body.preview { background: #e8eeec !important; }
 #preview-world { position: fixed; inset: 0; pointer-events: none; }
+#monitor-b { position: absolute; background: #dfe7e3; border-left: 3px dashed #8fa39a; }
+#monitor-b span { display: block; padding: 10px 12px; color: #4f665c; font-size: 12px; }
 #browser-obstacle { position: absolute; border: 3px solid #25312e; border-radius: 6px; background: #f8faf9; }
 #browser-obstacle span { display: block; padding: 12px; background: #d3ded8; color: #374d42; font-size: 13px; }
 #taskbar { position: absolute; bottom: 0; left: 0; right: 0; height: 40px; border-top: 2px solid #c15b49; background: #d1dad7; padding: 10px 20px; font-size: 12px; }

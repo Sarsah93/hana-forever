@@ -4,8 +4,8 @@ import { defineConfig, type Plugin } from "vite";
 
 /**
  * `publicDir` ships the sprite folder verbatim, which would also drag the raw
- * reference photos and the authoring notes into the installer. Drop them after
- * the copy so shipped builds only carry runtime sprites.
+ * reference photos, generated source sheets and the authoring notes into the
+ * installer. Drop them after the copy so shipped builds only carry runtime sprites.
  */
 function stripAuthoringAssets(): Plugin {
   let outDir = "dist";
@@ -16,7 +16,7 @@ function stripAuthoringAssets(): Plugin {
       outDir = resolve(config.root, config.build.outDir);
     },
     async closeBundle() {
-      for (const entry of ["_review", "README.md"]) {
+      for (const entry of ["_review", "_source", "README.md"]) {
         await rm(resolve(outDir, entry), { recursive: true, force: true });
       }
     }
@@ -29,5 +29,9 @@ export default defineConfig({
   plugins: [stripAuthoringAssets()],
   server: { port: 1420, strictPort: true },
   envPrefix: ["VITE_"],
-  build: { target: ["es2021", "chrome105", "safari13"] }
+  build: {
+    target: ["es2021", "chrome105", "safari13"],
+    // Two pages: the mascot window (index.html) and the action panel window (panel.html).
+    rollupOptions: { input: { main: "index.html", panel: "panel.html" } }
+  }
 });
