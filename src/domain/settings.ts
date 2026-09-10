@@ -1,5 +1,6 @@
 import type { Facing } from "./actions";
 import type { ActionRequest } from "./desktop-controller";
+import type { BubbleKind } from "./needs";
 /** User-facing switches. Persisted by the mascot window; the action panel only edits a copy. */
 export interface HanaSettings {
   /** 스스로 돌아다니기 */
@@ -39,6 +40,13 @@ export type PanelCommand =
   | { type: "action"; action: ActionRequest; facing: Facing }
   | { type: "interact"; kind: InteractionKind }
   | { type: "settings"; patch: Partial<HanaSettings> }
+  /** Windows "run at sign-in" registration — OS state, not a HanaSettings field. */
+  | { type: "autostart"; enabled: boolean }
+  | { type: "guide" }
   | { type: "reset" } | { type: "click-through" } | { type: "quit" } | { type: "close" };
 /** Snapshot pushed to the panel whenever it changes. */
-export interface PanelState { settings: HanaSettings; status: string; need?: string; }
+export interface PanelState {
+  settings: HanaSettings; status: string; need?: string; needKind?: BubbleKind;
+  /** Registered to run at sign-in; undefined in the browser preview, where there is no OS to ask. */
+  autostart?: boolean;
+}

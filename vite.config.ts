@@ -31,7 +31,7 @@ export default defineConfig({
   envPrefix: ["VITE_"],
   build: {
     target: ["es2021", "chrome105", "safari13"],
-    // Two pages: the mascot window (index.html) and the action panel window (panel.html).
-    rollupOptions: { input: { main: "index.html", panel: "panel.html" } }
+    // Three pages: the mascot window (index.html), the action panel window (panel.html) and the usage guide (guide.html).
+    rollupOptions: { input: { main: "index.html", panel: "panel.html", guide: "guide.html" } }
   }
 });

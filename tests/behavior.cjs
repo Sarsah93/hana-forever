@@ -1,10 +1,10 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { DesktopController } = require('../.test-build/domain/desktop-controller.js');
-const { STEP, integrateMotion } = require('../.test-build/domain/motion.js');
+const { STEP, BODY, integrateMotion, wallContact } = require('../.test-build/domain/motion.js');
 const { NeedsModel } = require('../.test-build/domain/needs.js');
 const { PettingDetector } = require('../.test-build/domain/petting.js');
-const { clipLength, findSprite, frameIndex } = require('../.test-build/assets/manifest.js');
+const { clipLength, findSprite, frameIndex, framePhase } = require('../.test-build/assets/manifest.js');
 const A = { id: 'a', primary: true, scaleFactor: 1, workArea: { left: 0, top: 0, right: 1200, bottom: 760 } };
 const twoMonitors = (bottomB) => ({ workArea: A.workArea, scaleFactor: 1, obstacles: [],
   monitors: [A, { id: 'b', scaleFactor: 1, workArea: { left: 1200, top: 0, right: 2400, bottom: bottomB } }] });
@@ -31,9 +31,55 @@ test('slightly higher neighbouring floor: hop up and keep walking', () => {
   assert(peak < 760, 'left the lower floor'); assert.equal(p.motion.y, 760); assert(p.motion.x < 1200, `back on monitor a (x=${p.motion.x})`);
   assert.equal(p.action, 'walk'); assert.equal(p.facing, 'left');
 });
-test('unreachable higher floor turns Hana around like a wall', () => {
-  const p = pet(twoMonitors(600)); p.motion = state(1100); p.request('walk', 'right'); tick(p, 2);
-  assert.equal(p.facing, 'left'); assert(p.motion.x <= 1132); assert.equal(p.motion.y, 760);
+test('a much higher bridged floor is leapt onto instead of being treated as a wall', () => {
+  const p = pet(twoMonitors(600)); p.motion = state(1100); p.request('walk', 'right');
+  let airborne = false; for (let i = 0; i < 120 * 4; i++) { p.tick(STEP); if (!p.motion.grounded) airborne = true; }
+  assert(airborne, 'left the floor'); assert.equal(p.motion.y, 600); assert(p.motion.x > 1200, `on monitor b (x=${p.motion.x})`);
+  assert.equal(p.action, 'walk'); assert.equal(p.facing, 'right', 'kept walking the same way');
+});
+test('only a real seam is crossed: stacked or gapped monitors and outer edges still turn Hana around', () => {
+  const above = { workArea: A.workArea, scaleFactor: 1, obstacles: [], monitors: [A, { id: 'b', scaleFactor: 1, workArea: { left: 0, top: -800, right: 1200, bottom: 0 } }] };
+  const p = pet(above); p.motion = state(1100); p.request('walk', 'right'); tick(p, 2);
+  assert.equal(p.facing, 'left', 'a monitor above shares no vertical seam'); assert.equal(p.motion.y, 760);
+  const gapped = { ...above, monitors: [A, { id: 'b', scaleFactor: 1, workArea: { left: 1300, top: 0, right: 2500, bottom: 600 } }] };
+  const q = pet(gapped); q.motion = state(1100); q.request('walk', 'right'); tick(q, 2);
+  assert.equal(q.facing, 'left', 'a gap is not a bridge'); assert(q.motion.x <= 1132);
+  const r = pet(twoMonitors(760)); r.motion = state(2300, 760); r.request('walk', 'right'); tick(r, 1);
+  assert.equal(r.facing, 'left', 'the far outer edge is still a wall'); assert(r.motion.x <= 2332);
+});
+test('walking off onto a lower floor resumes the walk after landing instead of stopping at the seam', () => {
+  const p = pet(twoMonitors(800)); p.motion = state(1100); p.request('walk', 'right'); tick(p, 4);
+  assert.equal(p.motion.y, 800); assert.equal(p.action, 'walk'); assert.equal(p.facing, 'right'); assert(p.motion.x > 1300, `deep into b (x=${p.motion.x})`);
+  p.stopWalking(); assert.equal(p.action, 'idle-stand');
+});
+test('realistic dual-monitor layouts are crossable both ways while walking', () => {
+  const layouts = [
+    [[0, 0, 1920, 1020, 1.25], [1920, 0, 3840, 1032, 1]],   // 1080p@125% + 1080p@100%
+    [[0, 0, 2560, 1392, 1], [2560, 0, 4480, 1032, 1]],       // 1440p + 1080p, top-aligned (360px step)
+    [[0, 0, 2560, 1392, 1], [2560, 180, 4480, 1212, 1]],     // centre-aligned
+    [[0, 0, 1920, 1008, 1.5], [1920, 0, 4480, 1392, 1]],     // laptop 150% + 1440p
+    [[-1920, 0, 0, 1032, 1], [0, 0, 1920, 1032, 1]],         // secondary on the left
+    [[0, 0, 3840, 2088, 1.5], [3840, 1080, 5760, 2112, 1]]   // 4K@150% + 1080p, bottom-aligned
+  ];
+  const mon = (id, r, primary) => ({ id, primary, scaleFactor: r[4], workArea: { left: r[0], top: r[1], right: r[2], bottom: r[3] } });
+  for (const [a, b] of layouts) for (const dir of ['right', 'left']) {
+    const p = pet({ workArea: mon('a', a, true).workArea, scaleFactor: a[4], obstacles: [], monitors: [mon('a', a, true), mon('b', b, false)] });
+    const start = dir === 'right' ? { x: a[2] - 200 * a[4], y: a[3] } : { x: b[0] + 200 * b[4], y: b[3] };
+    p.motion = { ...start, velocityX: 0, velocityY: 0, grounded: true, supportId: 'ground' }; p.request('walk', dir); tick(p, 8);
+    const crossed = dir === 'right' ? p.motion.x > b[0] + 100 : p.motion.x < a[2] - 100;
+    assert(crossed && p.facing === dir, `${JSON.stringify(a)} -> ${JSON.stringify(b)} ${dir}: x=${p.motion.x.toFixed(0)} y=${p.motion.y} ${p.action} ${p.facing}`);
+  }
+});
+test('a window poking out from behind a maximized one only exists where it can be seen', () => {
+  const B = { id: 'b', scaleFactor: 1, workArea: { left: 1200, top: 0, right: 2400, bottom: 760 } };
+  const mail = { id: 'mail', left: 0, top: 0, right: 1200, bottom: 760 };          // maximized on monitor a: backdrop
+  const browser = { id: 'browser', left: 900, top: 100, right: 1500, bottom: 700 }; // behind it, poking onto monitor b
+  const scene = { workArea: A.workArea, scaleFactor: 1, obstacles: [mail, browser], monitors: [A, B] };
+  const p = pet(scene);
+  assert.equal(wallContact(state(900 - BODY.halfWidth), p.scene, 'right'), undefined, 'the hidden left face is not a wall');
+  p.motion = state(700); p.request('walk', 'right'); tick(p, 4.7);
+  assert.equal(p.motion.x, 1200 - BODY.halfWidth, 'stopped at the visible edge on the seam'); assert.equal(p.action, 'lean');
+  assert.equal(p.drainEvents().find(e => e.type === 'lean')?.detail.includes('browser'), true, 'the lean is reported with its window');
 });
 test('integrateMotion reports the step height only when a higher floor blocks the way', () => {
   const scene = twoMonitors(800);
@@ -62,10 +108,11 @@ test('lunch reminder fires once per day with a wall-clock bubble', () => {
   tick(p, .5, { now: noon(50) }); assert.equal(p.bubble, undefined, 'does not fire again the same day');
   p.settings.reminders = false; needs.fired = {}; tick(p, .5, { now: noon(55) }); assert.equal(p.bubble, undefined, 'disabled reminders stay quiet');
 });
-test('hover petting settles Hana down; the content face comes after 2 s and keeps her lying direction', () => {
+test('hover petting settles Hana down through sitting; the content face comes after 2 s and keeps her lying direction', () => {
   const p = pet(); p.motion = state(500); p.setPetting(true);
-  assert.equal(p.action, 'lie-front'); const side = p.facing; assert.notEqual(side, 'front');
-  tick(p, 1.5); assert.equal(p.action, 'lie-front', 'still settling before 2 s');
+  assert.equal(p.action, 'sit', 'gets down through sitting'); assert.equal(p.transitioning, true);
+  tick(p, .4); assert.equal(p.action, 'lie-front'); const side = p.facing; assert.notEqual(side, 'front');
+  tick(p, 1.1); assert.equal(p.action, 'lie-front', 'still settling before 2 s');
   tick(p, .7); assert.equal(p.action, 'smile'); assert.equal(p.facing, side);
   assert.equal(findSprite('smile', side).mirror, findSprite('lie-front', side).mirror, 'smile mirrors like the lie it came from');
   p.setPetting(false); tick(p, 1); assert.equal(p.action, 'smile'); tick(p, 1); assert.equal(p.action, 'lie-front'); assert.equal(p.facing, side);
@@ -88,7 +135,7 @@ test('petting answers a pet request; snack and toy answer theirs', () => {
   assert.equal(needs.active, 'pet'); p.setPetting(true);
   assert.equal(needs.active, undefined); assert.equal(p.bubble, undefined);
   assert.equal(p.drainEvents().find(e => e.type === 'petting')?.detail, 'wanted');
-  p.setPetting(false); p.settings.needs = false; tick(p, 2); needs.demand('snack'); assert.match(p.interact('snack'), /기다리던 간식/); assert.equal(p.action, 'lick');
+  p.setPetting(false); p.settings.needs = false; tick(p, 2); needs.demand('snack'); assert.match(p.interact('snack'), /기다리던 간식/); tick(p, .5); assert.equal(p.action, 'lick', 'up through sitting, then curls to lick');
   tick(p, 6); needs.demand('toy'); assert.match(p.interact('toy'), /놀자/); assert.equal(p.action, 'jump');
   tick(p, 1.5); assert.equal(p.action, 'shake');
 });
@@ -138,6 +185,34 @@ test('side art mirrors by facing and clip cycles follow their durations', () => 
   assert.equal(frameIndex('smile', 0, 0), 1);
 });
 
+test('pose changes pass through the poses a dog really uses: getting-up frames, sitting between lying and standing', () => {
+  const p = pet(); p.motion = state(500);
+  p.request('crouch'); tick(p, 1); assert.equal(frameIndex('crouch', p.age, 0), 2, 'settled');
+  p.request('idle-stand');
+  assert.equal(p.action, 'crouch', 'still curled while getting up'); assert.equal(p.transitioning, true);
+  assert.equal(p.frameOverride, 1, 'settle-in played backwards: the rising frame first');
+  tick(p, .3); assert.equal(p.frameOverride, 0, 'then the standing frame');
+  tick(p, .2); assert.equal(p.action, 'idle-stand'); assert.equal(p.transitioning, false); assert.equal(p.frameOverride, undefined);
+  p.request('lie-down', 'left'); assert.equal(p.action, 'sit', 'settles through sitting'); assert.equal(p.facing, 'left');
+  tick(p, .4); assert.equal(p.action, 'lie-down'); assert.equal(frameIndex('lie-down', p.age, 0), 4, 'then its own head-lowering intro');
+  tick(p, 2); p.request('lie-front', 'left');
+  assert.equal(p.action, 'lie-down'); assert.equal(p.frameOverride, 4, 'the head lifts before the head-up lie');
+  tick(p, .3); assert.equal(p.action, 'lie-front'); assert.equal(p.facing, 'left');
+  p.request('walk', 'right'); assert.equal(p.action, 'sit', 'gets up through sitting'); tick(p, .45); assert.equal(p.action, 'walk');
+  p.request('jump'); assert.equal(p.action, 'jump', 'physics never waits for choreography');
+  const lying = (x) => ['lie-front', 'lie-down', 'recline', 'yawn', 'smile'].includes(x), upright = (x) => ['idle-stand', 'walk', 'stand-up', 'shake', 'crouch', 'lick'].includes(x);
+  const q = pet(ground, lcg(9)); q.autonomous = true; q.settings.gaze = false; q.settings.needs = false; q.motion = state(500);
+  let cuts = 0, last = q.action;
+  for (let i = 0; i < 120 * 600; i++) { q.tick(STEP, { now: afternoon }); const a = q.action; if (a !== last) { if ((lying(last) && upright(a)) || (upright(last) && lying(a))) cuts++; last = a; } }
+  assert.equal(cuts, 0, 'free roaming never cuts straight between lying and upright');
+});
+test('smooth clips dissolve into their next frame; gaits and shakes cut', () => {
+  const a = framePhase('lick', .75 + .29, 0); assert.equal(a.index, 2); assert.equal(a.next, 3); assert(a.blend > .9, 'end of the first lick step blends toward the tongue frame');
+  const b = framePhase('lick', .75 + .05, 0); assert.equal(b.index, 2); assert.equal(b.blend, 0, 'start of a step is crisp');
+  const w = framePhase('walk', .13, 0); assert.equal(w.index, 1); assert.equal(w.blend, 0); assert.equal(w.next, undefined);
+  assert.equal(framePhase('shake', .3, 0).blend, 0);
+  const e = framePhase('shake', 99, 0); assert.equal(e.index, 7); assert.equal(e.blend, 0, 'a finished one-shot holds without blending');
+});
 test('focus mode moves Hana clear of windows, hides her when nothing fits, and brings her back', () => {
   const browser = { id: 'browser', left: 300, top: 80, right: 900, bottom: 738 };
   const clear = (p) => p.motion.x < 300 - 68 - 24 || p.motion.x > 900 + 68 + 24;

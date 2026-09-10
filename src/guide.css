@@ -1,0 +1,26 @@
+:root { font-family: "Segoe UI", "Malgun Gothic", sans-serif; color: #37261e; font-size: 13px; line-height: 1.6; }
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 100%; height: 100%; background: #fffaf5; }
+body { overflow: auto; }
+.guide { max-width: 720px; margin: 0 auto; padding: 22px 26px 30px; }
+.guide-head { border-bottom: 1px solid #e6d3c2; padding-bottom: 14px; margin-bottom: 8px; }
+h1 { font-size: 20px; margin: 0 0 6px; }
+h2 { font-size: 15px; margin: 26px 0 8px; padding-top: 6px; color: #7a4a30; border-top: 1px dashed #ead9c9; }
+.lede { margin: 0 0 12px; color: #5a4235; }
+.toc { display: flex; flex-wrap: wrap; gap: 6px; }
+.toc a { font-size: 12px; padding: 3px 9px; border: 1px solid #dbc1ac; border-radius: 999px; background: #fff; color: #7a5a48; text-decoration: none; }
+.toc a:hover { background: #f4e2d3; }
+section { scroll-margin-top: 10px; }
+ul { padding-left: 20px; margin: 6px 0; } li { margin: 4px 0; }
+table { border-collapse: collapse; width: 100%; margin: 6px 0 4px; }
+th, td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid #efe2d5; }
+th { color: #7a5a48; font-weight: 600; background: #f9f0e7; }
+td:first-child { white-space: nowrap; color: #5a3d2c; font-weight: 600; width: 34%; }
+dl { margin: 6px 0; } dt { font-weight: 600; color: #5a3d2c; margin-top: 10px; } dd { margin: 2px 0 0 0; color: #4a352b; }
+kbd { font-family: inherit; font-size: 12px; padding: 1px 6px; border: 1px solid #cdb6a3; border-bottom-width: 2px; border-radius: 5px; background: #fff; }
+code { font-family: Consolas, "Malgun Gothic", monospace; font-size: 12px; background: #f4ece4; padding: 1px 5px; border-radius: 4px; }
+.note { color: #7a5a48; font-size: 12px; margin: 8px 0 0; }
+a { color: #9a6043; }
+.guide-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 28px; padding-top: 12px; border-top: 1px solid #e6d3c2; color: #9a8a7e; font-size: 12px; }
+button { border: 1px solid #dbc1ac; border-radius: 6px; padding: 6px 14px; background: white; color: #513529; cursor: pointer; font: inherit; }
+button:hover { background: #f4e2d3; } button:focus-visible { outline: 2px solid #9a6043; }

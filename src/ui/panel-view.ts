@@ -1,6 +1,7 @@
 import type { Facing } from "../domain/actions";
 import type { ActionRequest, DesktopAction } from "../domain/desktop-controller";
 import { CLOCK_RE, type HanaSettings, type InteractionKind, type PanelCommand, type PanelState } from "../domain/settings";
+import { ICON_SVG } from "./icons";
 export interface PanelHost { send(command: PanelCommand): void; }
 type Tab = "place" | "left" | "right" | "back" | "care" | "settings";
 const TABS: readonly [Tab, string][] = [["place", "제자리"], ["left", "왼쪽"], ["right", "오른쪽"], ["back", "뒤"], ["care", "교감"], ["settings", "설정"]];
@@ -37,7 +38,8 @@ export function mountPanel(root: HTMLElement, host: PanelHost, options: { native
       <label><input type="checkbox" data-setting="needs" /> 요구·생각 풍선 (간식·장난감·쓰다듬기)</label>
       <label><input type="checkbox" data-setting="reminders" /> 시간 알림 (벽시계 풍선)</label>
       <div class="times"><label>점심 <input type="time" data-time="lunch" /></label><label>퇴근 <input type="time" data-time="leave" /></label></div>
-      <div class="action-grid"><button type="button" id="reset">바닥으로</button><button type="button" id="click-through">클릭 통과</button><button type="button" id="quit">종료</button></div>
+      <label id="autostart-row"><input type="checkbox" id="autostart" /> Windows 시작 시 자동 실행<br><small>로그인하면 하나가 스스로 켜져요. 트레이 메뉴에서도 켜고 끌 수 있어요.</small></label>
+      <div class="action-grid"><button type="button" id="reset">바닥으로</button><button type="button" id="click-through">클릭 통과</button><button type="button" id="guide">사용법 가이드</button><button type="button" id="quit">종료</button></div>
       <p class="hint">← → 걷기 · Space 점프 · F2 패널 · 하나 드래그 · 더블클릭 점프<br>클릭 통과 후에는 트레이 메뉴로 되돌립니다.</p>
     </section>
     <footer><output id="status" aria-live="polite"></output><span id="need"></span></footer>`;
@@ -52,12 +54,15 @@ export function mountPanel(root: HTMLElement, host: PanelHost, options: { native
   for (const [label, kind, title] of CARE) q("#care").append(button(label, title, () => host.send({ type: "interact", kind }), kind === "talk"));
   q("#reset").onclick = () => host.send({ type: "reset" });
   q("#click-through").onclick = () => host.send({ type: "click-through" });
+  q("#guide").onclick = () => host.send({ type: "guide" });
   q("#quit").onclick = () => host.send({ type: "quit" });
   q("#close-panel").onclick = () => host.send({ type: "close" });
   const tracking = q<HTMLButtonElement>("#tracking");
+  const autostart = q<HTMLInputElement>("#autostart");
   let current: HanaSettings | undefined;
   tracking.onclick = () => host.send({ type: "settings", patch: { panelTracking: !current?.panelTracking } });
-  if (!options.native) tracking.hidden = true;
+  autostart.onchange = () => host.send({ type: "autostart", enabled: autostart.checked });
+  if (!options.native) { tracking.hidden = true; q("#autostart-row").hidden = true; q("#guide").hidden = true; }
   for (const input of root.querySelectorAll<HTMLInputElement>("input[data-setting]")) {
     input.onchange = () => host.send({ type: "settings", patch: { [input.dataset.setting!]: input.checked } });
   }
@@ -73,6 +78,7 @@ export function mountPanel(root: HTMLElement, host: PanelHost, options: { native
   for (const t of tabs) t.onclick = () => showTab(t.dataset.tab!);
   let saved = "place"; try { saved = localStorage.getItem(TAB_KEY) ?? "place"; } catch { /* ignore */ }
   showTab(TABS.some(([id]) => id === saved) ? saved : "place");
+  const need = q("#need");
   return {
     setState(state: PanelState) {
       current = state.settings;
@@ -80,8 +86,13 @@ export function mountPanel(root: HTMLElement, host: PanelHost, options: { native
       for (const input of root.querySelectorAll<HTMLInputElement>("input[data-time]")) { const v = state.settings[input.dataset.time as "lunch" | "leave"]; if (input.value !== v) input.value = v; }
       tracking.textContent = state.settings.panelTracking ? "따라가기 켬" : "따라가기 끔";
       tracking.classList.toggle("on", state.settings.panelTracking);
+      autostart.checked = Boolean(state.autostart); autostart.disabled = state.autostart === undefined;
       q("#status").textContent = state.status;
-      q("#need").textContent = state.need ? `💭 ${state.need}` : "";
+      need.replaceChildren();
+      if (state.need) {
+        const pic = document.createElement("span"); pic.className = "need-icon"; pic.innerHTML = ICON_SVG[state.needKind ?? "pet"];
+        need.append(pic, document.createTextNode(state.need));
+      }
     },
     showTab
   };

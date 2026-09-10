@@ -2,15 +2,17 @@ import "./styles.css";
 import { ACTION_LABEL, DesktopController, type ActionRequest } from "./domain/desktop-controller";
 import { STEP, type Point, type Rect } from "./domain/motion";
 import type { Facing } from "./domain/actions";
-import { findSprite, frameBounds, frameIndex, SPRITES } from "./assets/manifest";
+import { findSprite, frameBounds, framePhase, SPRITES, type FramePhase, type SpriteClip } from "./assets/manifest";
 import { NEED_LABEL } from "./domain/needs";
 import { normalizeSettings, SETTINGS_KEY, type HanaSettings, type PanelCommand, type PanelState } from "./domain/settings";
 import { PettingDetector } from "./domain/petting";
-import { drawBubble } from "./ui/bubble";
+import { drawBubble, preloadBubbleIcons } from "./ui/bubble";
 import { mountPanel } from "./ui/panel-view";
 import { ANCHOR, getWindowBridge, inTauri, PANEL_SIZE, previewScene, WINDOW } from "./platform/window";
 const native = inTauri();
 const FIRED_KEY = "hana.reminders.fired";
+/** Dissolve between poses (ms), and the shorter one for a plain left/right flip of the same clip. */
+const FADE_MS = 200, FLIP_MS = 120;
 const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `
   <div id="preview-world" hidden>
@@ -55,6 +57,11 @@ let statusNote = "";
 let lastPanelPush = 0, lastPanelJson = "";
 let settings: HanaSettings = loadSettings();
 let shownHidden = false;
+/** Run-at-sign-in registration as the OS reports it; undefined in the browser preview. */
+let autostart: boolean | undefined;
+/** What the previous frame showed, and the pose it is still dissolving away from. */
+let shown: { clip: SpriteClip; index: number; key: string } | undefined;
+let fading: { clip: SpriteClip; index: number; at: number; ms: number } | undefined;
 function loadSettings(): HanaSettings {
   try { return normalizeSettings(JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? "{}")); } catch { return normalizeSettings({}); }
 }
@@ -74,12 +81,13 @@ function statusText() {
   if (!controller) return "";
   if (controller.hidden) return "집중 모드 · 빈 자리가 없어 숨어 있어요 (자리가 나면 돌아와요)";
   const { motion, action, facing } = controller;
-  const marks = [settings.focus ? "집중 모드" : "", controller.petting ? "쓰다듬는 중" : "", controller.watchingCursor ? "커서 구경" : "", statusNote].filter(Boolean);
+  const marks = [settings.focus ? "집중 모드" : "", controller.petting ? "쓰다듬는 중" : "", controller.watchingCursor ? "커서 구경" : "", controller.crossing ? "모니터 건너는 중" : "", statusNote].filter(Boolean);
   return `${ACTION_LABEL[action]} · ${facing === "left" ? "왼쪽" : facing === "right" ? "오른쪽" : "정면"} · ${motion.grounded ? "접지" : "공중"}${marks.length ? " · " + marks.join(" · ") : ""}`;
 }
 function panelState(): PanelState {
   const bubble = controller?.bubble;
-  return { settings, status: statusText(), need: bubble ? (bubble.kind === "clock" ? `${bubble.label} ${NEED_LABEL.clock}` : NEED_LABEL[bubble.kind]) : undefined };
+  return { settings, status: statusText(), autostart,
+    need: bubble ? (bubble.kind === "clock" ? `${bubble.label} ${NEED_LABEL.clock}` : NEED_LABEL[bubble.kind]) : undefined, needKind: bubble?.kind };
 }
 function pushPanelState(force = false) {
   const now = performance.now();
@@ -120,6 +128,12 @@ async function togglePanel(open?: boolean) {
     else { void debugLog("panel hide"); await bridge.panelHide(); panelOpen = false; }
   } else { previewPanel.hidden = !next; panelOpen = next; pushPanelState(true); }
 }
+/** Tray/panel "bring her back": leaving focus mode is implied — otherwise she would just hide again. */
+function recall() {
+  forcedClickThrough = false; ignoringCursor = false;
+  if (settings.focus) { applySettings({ focus: false }); note("집중 모드 해제: 작업 표시줄 위로 돌아왔어요", 5); }
+  controller.reset();
+}
 function handleCommand(command: PanelCommand) {
   if (!controller) { if (command.type === "ready") panelOpen = true; return; }
   switch (command.type) {
@@ -127,7 +141,9 @@ function handleCommand(command: PanelCommand) {
     case "action": manual(command.action, command.facing); break;
     case "interact": controller.holdAutonomy(20); note(controller.interact(command.kind), 5); break;
     case "settings": applySettings(command.patch); break;
-    case "reset": controller.reset(); break;
+    case "autostart": void bridge.setAutostart(command.enabled).then(v => { autostart = v; note(v ? "Windows 시작 시 자동 실행: 켬" : "Windows 시작 시 자동 실행: 끔"); }).catch(reportError); break;
+    case "guide": void bridge.guideShow().catch(reportError); break;
+    case "reset": recall(); break;
     case "click-through": forcedClickThrough = true; void bridge.setIgnoreCursor(true).then(() => { ignoringCursor = true; }).catch(reportError); void togglePanel(false); break;
     case "quit": void bridge.quit().catch(reportError); break;
     case "close": void togglePanel(false).catch(reportError); break;
@@ -141,10 +157,8 @@ window.addEventListener("keydown", e => {
     e.preventDefault(); if (!e.repeat) { heldArrow = e.key; manual("walk", e.key === "ArrowLeft" ? "left" : "right"); }
   }
 });
-window.addEventListener("keyup", e => {
-  if (e.key === heldArrow) { heldArrow = undefined; if (controller?.action === "walk") controller.request("idle-stand"); }
-});
-window.addEventListener("blur", () => { if (heldArrow && controller?.action === "walk") controller.request("idle-stand"); heldArrow = undefined; });
+window.addEventListener("keyup", e => { if (e.key === heldArrow) { heldArrow = undefined; controller?.stopWalking(); } });
+window.addEventListener("blur", () => { if (heldArrow) controller?.stopWalking(); heldArrow = undefined; });
 canvas.addEventListener("dblclick", () => manual("jump"));
 canvas.addEventListener("contextmenu", e => { e.preventDefault(); void togglePanel().catch(reportError); });
 canvas.addEventListener("pointerdown", e => {
@@ -169,7 +183,17 @@ canvas.addEventListener("pointermove", e => {
 canvas.addEventListener("pointerleave", () => { overHead = false; });
 function release() { if (!dragging) return; dragging = false; pointer = undefined; controller.drop(controller.motion.x, controller.motion.y); }
 canvas.addEventListener("pointerup", release); canvas.addEventListener("pointercancel", release); canvas.addEventListener("lostpointercapture", release);
-function draw() {
+const ease = (t: number) => t * t * (3 - 2 * t);
+/** One sprite frame at the feet anchor, mirrored for the opposite facing, with the given weight. */
+function paint(clip: SpriteClip, index: number, alpha: number) {
+  const f = clip.frames[index];
+  if (!f || alpha <= 0) return;
+  const [sx, sy, sw, sh] = f.rect, [fx, fy] = f.foot;
+  ctx.save(); ctx.globalAlpha = alpha; ctx.translate(ANCHOR.x, ANCHOR.y); ctx.scale(clip.mirror ? -1 : 1, 1);
+  ctx.drawImage(images.get(clip.src)!, sx, sy, sw, sh, (sx - fx) * clip.scale, (sy - fy) * clip.scale, sw * clip.scale, sh * clip.scale);
+  ctx.restore();
+}
+function draw(now: number) {
   if (controller.hidden !== shownHidden) {
     shownHidden = controller.hidden;
     if (native) void bridge.setVisible(!shownHidden).catch(reportError); else mascot.hidden = shownHidden;
@@ -177,16 +201,27 @@ function draw() {
   if (controller.hidden) return;
   const { motion, action, facing, age } = controller;
   const clip = findSprite(action, facing);
-  const index = controller.frameOverride ?? frameIndex(action, age, motion.velocityY / controller.currentScale());
-  const frame = clip.frames[index];
+  const phase: FramePhase = controller.frameOverride !== undefined ? { index: controller.frameOverride, blend: 0 } : framePhase(action, age, motion.velocityY / controller.currentScale());
+  // A change of clip or facing starts a dissolve from what was on screen; a bare mirror flip gets the shorter one.
+  const key = `${clip.id}|${clip.mirror ? "m" : ""}`;
+  if (shown && key !== shown.key) fading = { clip: shown.clip, index: shown.index, at: now, ms: shown.clip.id === clip.id ? FLIP_MS : FADE_MS };
+  shown = { clip, index: phase.index, key };
   const dpr = devicePixelRatio || 1;
   if (canvas.width !== Math.round(WINDOW.width * dpr) || canvas.height !== Math.round(WINDOW.height * dpr)) { canvas.width = Math.round(WINDOW.width * dpr); canvas.height = Math.round(WINDOW.height * dpr); }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, WINDOW.width, WINDOW.height);
-  ctx.save(); ctx.translate(ANCHOR.x, ANCHOR.y); ctx.scale(clip.mirror ? -1 : 1, 1);
-  const [sx, sy, sw, sh] = frame.rect, [fx, fy] = frame.foot;
-  ctx.drawImage(images.get(clip.src)!, sx, sy, sw, sh, (sx - fx) * clip.scale, (sy - fy) * clip.scale, sw * clip.scale, sh * clip.scale);
-  ctx.restore();
-  const b = frameBounds(clip, index);
+  // Layers are weighted to sum to 1 and added with "lighter", so the dissolve keeps full opacity where the poses
+  // overlap instead of dipping to a ghost in the middle.
+  let weight = 1;
+  ctx.globalCompositeOperation = "source-over";
+  if (fading) {
+    const t = (now - fading.at) / fading.ms;
+    if (t >= 1) fading = undefined;
+    else { const e = ease(t); paint(fading.clip, fading.index, 1 - e); weight = e; ctx.globalCompositeOperation = "lighter"; }
+  }
+  paint(clip, phase.index, weight * (1 - phase.blend));
+  if (phase.next !== undefined && phase.blend > 0) { ctx.globalCompositeOperation = "lighter"; paint(clip, phase.next, weight * phase.blend); }
+  ctx.globalCompositeOperation = "source-over";
+  const b = frameBounds(clip, phase.index);
   drawn = { left: ANCHOR.x + b.left, top: ANCHOR.y + b.top, right: ANCHOR.x + b.left + b.width, bottom: ANCHOR.y + b.top + b.height };
   const headShare = action === "stand-up" ? .3 : action === "sit" || action === "scratch" ? .38 : .45;
   headRect = { left: drawn.left, top: drawn.top, right: drawn.right, bottom: drawn.top + b.height * headShare };
@@ -204,20 +239,23 @@ function draw() {
 }
 function handleEvents() {
   for (const e of controller.drainEvents()) {
-    if (e.type === "need") note(`💭 ${e.detail}`, 8);
-    else if (e.type === "reminder") { note(`🕛 ${e.detail} 알림`, 8); try { localStorage.setItem(FIRED_KEY, JSON.stringify(controller.needs.fired)); } catch { /* ignore */ } }
+    if (e.type === "need") note(e.detail, 8);
+    else if (e.type === "reminder") { note(`${e.detail} 알림`, 8); try { localStorage.setItem(FIRED_KEY, JSON.stringify(controller.needs.fired)); } catch { /* ignore */ } }
     else if (e.type === "petting") note(e.detail === "wanted" ? "기다리던 쓰다듬기! 헤헤" : "헤헤, 좋아요", 4);
     else if (e.type === "focus") note({ on: "집중 모드: 창을 피해 조용히 있을게요", hidden: "집중 모드: 빈 자리가 없어 잠시 숨어요", back: "빈 자리가 생겨 돌아왔어요", moved: "창을 피해 자리를 옮겼어요", off: "집중 모드 해제: 빈 자리로 돌아왔어요" }[e.detail] ?? e.detail, 5);
+    else if (e.type === "lean") void debugLog(`lean on ${e.detail}`);
   }
 }
-function render(now: number) {
-  accumulator += Math.min((now - last) / 1000, .1); last = now;
+/** Advance the simulation to `now` and redraw. Called from animation frames, and from a timer whenever those stall. */
+function step(now: number) {
+  accumulator += Math.min((now - last) / 1000, .25); last = now;
   const wasPetting = petting.active;
   petting.update(now / 1000, overHead);
   if (wasPetting && !petting.active) controller.setPetting(false);
   while (accumulator >= STEP) { if (!dragging) controller.tick(STEP, { cursor, now: Date.now() }); accumulator -= STEP; }
-  draw(); handleEvents(); pushPanelState(); requestAnimationFrame(render);
+  draw(now); handleEvents(); pushPanelState();
 }
+function frame(now: number) { step(now); requestAnimationFrame(frame); }
 function drawPreview() {
   const scene = previewScene(), o = scene.obstacles[0], b = scene.monitors![1].workArea;
   const el = document.querySelector<HTMLElement>("#browser-obstacle")!;
@@ -254,6 +292,7 @@ async function start() {
   await Promise.all([...new Set(SPRITES.map(c => c.src))].map(async src => {
     const image = new Image(); image.src = src; await image.decode(); images.set(src, image);
   }));
+  preloadBubbleIcons();
   controller = new DesktopController(await bridge.scene());
   controller.settings = settings;
   try { controller.needs.fired = JSON.parse(localStorage.getItem(FIRED_KEY) ?? "{}"); } catch { /* ignore */ }
@@ -266,12 +305,17 @@ async function start() {
     await bridge.onEvent<PanelCommand>("hana://panel-command", handleCommand);
     await bridge.onEvent<Partial<HanaSettings>>("hana://settings", patch => applySettings(patch));
     await bridge.onEvent("hana://toggle-panel", () => { void togglePanel().catch(reportError); });
-    await bridge.onEvent("hana://reset", () => { forcedClickThrough = false; ignoringCursor = false; controller.reset(); });
+    await bridge.onEvent("hana://reset", recall);
     await bridge.onEvent("hana://panel-closed", () => { panelOpen = false; });
+    await bridge.onEvent<boolean>("hana://autostart", enabled => { autostart = enabled; pushPanelState(true); });
+    autostart = await bridge.autostart().catch(() => undefined);
     void bridge.syncTray(settings).catch(reportError);
     void pollCursor();
   }
   window.addEventListener("resize", () => { if (!native) { controller.setScene(previewScene()); drawPreview(); } });
-  last = performance.now(); requestAnimationFrame(render); void refreshScene();
+  last = performance.now(); requestAnimationFrame(frame); void refreshScene();
+  // WebView2 stops animation frames while the window is hidden (focus mode with no free spot), which would also
+  // stop the checks that bring her back — including "focus mode switched off". A timer keeps the simulation alive.
+  window.setInterval(() => { const now = performance.now(); if (now - last >= 190) step(now); }, 200);
 }
 void start().catch(reportError);

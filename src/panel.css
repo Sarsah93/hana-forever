@@ -16,8 +16,10 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:
 button { border: 1px solid #dbc1ac; border-radius: 6px; padding: 5px 8px; background: white; color: #513529; cursor: pointer; font: inherit; }
 button:hover:not(:disabled) { background: #f4e2d3; } button:focus-visible { outline: 2px solid #9a6043; } button:disabled { opacity: .5; cursor: default; }
 label { display: block; margin: 6px 0; }
+label small { color: #7a5a48; }
 .times { display: flex; gap: 12px; margin: 8px 0; } .times label { display: flex; align-items: center; gap: 6px; }
 input[type="time"] { font: inherit; padding: 2px 4px; border: 1px solid #dbc1ac; border-radius: 6px; }
 .hint { line-height: 1.5; margin: 8px 0 0; color: #7a5a48; font-size: 11px; }
-footer { padding: 6px 10px; border-top: 1px solid #e6d3c2; display: flex; justify-content: space-between; gap: 8px; font-size: 11px; min-height: 26px; }
-output { color: #805238; } #need { color: #9a6043; }
+footer { padding: 6px 10px; border-top: 1px solid #e6d3c2; display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 11px; min-height: 26px; }
+output { color: #805238; } #need { color: #9a6043; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.need-icon { display: inline-flex; } .need-icon svg { width: 16px; height: 16px; }

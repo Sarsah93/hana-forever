@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>하나 · 사용법 가이드</title>
+  </head>
+  <body>
+    <main id="guide" class="guide">
+      <header class="guide-head">
+        <div>
+          <h1>하나 사용법 가이드</h1>
+          <p class="lede">갈색 토이푸들 <strong>하나</strong>는 작업 표시줄 위에서 사는 데스크톱 친구예요. 스스로 돌아다니고, 창에 기대고, 모니터를 건너다니고, 가끔 뭔가를 조르기도 해요. 이 창은 <kbd>Esc</kbd>로 닫아요.</p>
+        </div>
+        <nav class="toc" aria-label="목차">
+          <a href="#about">하나는 이런 친구</a><a href="#controls">기본 조작</a><a href="#panel">액션 패널</a><a href="#care">교감과 생각 풍선</a><a href="#settings">설정</a><a href="#tray">트레이 메뉴</a><a href="#world">창과 모니터</a><a href="#focus">집중 모드</a><a href="#autostart">자동 실행</a><a href="#faq">문제 해결</a><a href="#keys">단축키 요약</a>
+        </nav>
+      </header>
+
+      <section id="about">
+        <h2>하나는 이런 친구예요</h2>
+        <ul>
+          <li><strong>바닥은 작업 표시줄 윗선</strong>이에요. 창 위에 올라설 수도 있고, 밟고 있던 창이 사라지면 떨어져서 착지해요.</li>
+          <li><strong>스스로 돌아다녀요.</strong> 걷기·서 있기·두 발 서기·점프·털기·턱 긁기, 그리고 앉기·엎드리기·엎드려 쉬기·뒤돌아보기·웅크리기·하품 같은 휴식 자세를 섞어 지내요. 시간의 40% 정도는 쉬어요.</li>
+          <li><strong>창 옆면은 벽</strong>이에요. 걷다가 창에 닿으면 두 앞발을 창에 기대고, 잠시 뒤 돌아서요. 창이 움직이거나 최소화되면 기대기를 풀어요. 화면에 실제로 보이는 창만 벽으로 쳐요 — 다른 창 뒤에 가려진 부분엔 부딪히지 않아요.</li>
+          <li><strong>모니터 두 대 이상</strong>이면 맞닿은 모니터 사이를 걸어서 오가요. 옆 모니터 바닥이 낮으면 뛰어내리고, 높으면 뛰어올라요. 화면 바깥쪽 가장자리는 넘어가지 않아요.</li>
+          <li><strong>항상 맨 위에</strong> 있지만, 하나 몸 밖의 투명한 부분은 클릭이 그대로 뒤의 창으로 통과해요. 작업에 방해가 되지 않아요.</li>
+          <li>동작이 바뀔 때 갑자기 끊기지 않도록, 엎드린 자세에서 일어날 땐 앉기를 거치고, 웅크린 자세에선 몸을 일으키는 장면을 먼저 보여줘요.</li>
+        </ul>
+      </section>
+
+      <section id="controls">
+        <h2>기본 조작</h2>
+        <table>
+          <thead><tr><th>하고 싶은 것</th><th>방법</th></tr></thead>
+          <tbody>
+            <tr><td>옮기기</td><td>하나를 <strong>드래그</strong>해서 놓기. 다른 모니터로도 옮길 수 있고, 놓으면 떨어져 착지해요.</td></tr>
+            <tr><td>점프</td><td>하나를 <strong>더블클릭</strong>, 또는 <kbd>Space</kbd> (하나를 한 번 클릭해 포커스를 준 뒤)</td></tr>
+            <tr><td>걷기</td><td><kbd>←</kbd> <kbd>→</kbd>를 누르고 있기. 떼면 멈춰요.</td></tr>
+            <tr><td>액션 패널 열기·닫기</td><td>하나 <strong>우클릭</strong> · <kbd>F2</kbd> · 트레이 아이콘 우클릭 → 액션 패널</td></tr>
+            <tr><td>쓰다듬기</td><td>하나 <strong>머리 위에서 마우스를 살살 문지르기</strong> (버튼을 누르지 않고). 엎드려서 좋아하고, 2초 넘게 이어지면 눈을 감고 웃어요.</td></tr>
+            <tr><td>작업 표시줄 위로 데려오기</td><td>트레이 아이콘 우클릭 → 작업 표시줄 위로 데려오기 (집중 모드도 함께 꺼져요)</td></tr>
+            <tr><td>종료</td><td>트레이 아이콘 우클릭 → <strong>하나 보내주기</strong>, 또는 패널 설정 탭의 종료</td></tr>
+          </tbody>
+        </table>
+        <p class="note">하나 창에는 제목줄도 닫기 버튼도 없고 작업 표시줄에도 뜨지 않아요. 조작은 위 방법과 트레이 아이콘뿐이에요.</p>
+      </section>
+
+      <section id="panel">
+        <h2>액션 패널</h2>
+        <p>하나 옆에 뜨는 작은 리모컨이에요. 제목줄을 드래그해서 옮기고, <strong>따라가기</strong>를 켜면 하나가 움직일 때 같이 따라가요. 패널로 시킨 동작은 25초 동안 자율 행동보다 우선해요.</p>
+        <table>
+          <thead><tr><th>탭</th><th>내용</th></tr></thead>
+          <tbody>
+            <tr><td>제자리</td><td>서 있기 · 쉬기(휴식 자세 중 하나를 골라요) · 두 발 서기 · 점프 · 엎드리기 · 엎드려 쉬기 · 털기 · 하품 · 웅크리고 앉기 · 앉은 채로 되새김질</td></tr>
+            <tr><td>왼쪽 / 오른쪽</td><td>방향을 정해서 걷기 · 빠르게 · 기대기 · 앉기 · 턱 긁기 · 엎드리기 · 엎드려 쉬기. <em>기대기</em>는 창 옆에 닿아 있을 때만 돼요.</td></tr>
+            <tr><td>뒤</td><td>뒤로 돌아 어깨 너머로 바라보기</td></tr>
+            <tr><td>교감</td><td>쓰다듬기 · 간식 주기 · 놀아주기 (말 걸기는 준비 중)</td></tr>
+            <tr><td>설정</td><td>아래 <a href="#settings">설정</a> 참고</td></tr>
+          </tbody>
+        </table>
+        <p>아래 상태줄에는 지금 동작 · 방향 · 접지 여부와, 풍선이 떠 있으면 무엇을 원하는지가 보여요.</p>
+      </section>
+
+      <section id="care">
+        <h2>교감과 생각 풍선</h2>
+        <ul>
+          <li>2.5~5.5분마다 <strong>간식 · 장난감 · 쓰다듬기</strong> 중 하나를 원해요. 머리 옆에 생각 풍선이 60초 동안 뜨고, 그동안 두 발로 서서 졸라요.</li>
+          <li>교감 탭에서 원하는 걸 주면 반응해요: <strong>쓰다듬기</strong> → 엎드려 웃기 · <strong>간식</strong> → 웅크리고 되새김질 · <strong>놀아주기</strong> → 점프 후 털기. 기다리던 것이면 상태줄 문구가 달라져요.</li>
+          <li>풍선이 없어도 언제든 교감할 수 있어요.</li>
+          <li><strong>점심 · 퇴근 시각</strong>이 되면 벽시계 풍선이 90초 동안 떠요(하루 한 번). 시각은 설정 탭이나 트레이의 <em>알림 시간</em>에서 바꿔요.</li>
+          <li><strong>커서 바라보기</strong>: 서 있거나 엎드려 있을 때 마우스가 가까이서 움직이면 옆으로 앉아 커서를 봐요. 커서가 위에 있으면 고개를 들어요. 커서 좌표는 읽기만 하고 어디에도 보내지 않아요.</li>
+        </ul>
+      </section>
+
+      <section id="settings">
+        <h2>설정</h2>
+        <table>
+          <thead><tr><th>항목</th><th>설명</th></tr></thead>
+          <tbody>
+            <tr><td>집중 모드 (방해 금지)</td><td>창을 피해 빈 곳에 조용히 엎드려 있어요. 걷기·점프·풍선·커서 바라보기를 멈춰요. 자세한 건 <a href="#focus">집중 모드</a>.</td></tr>
+            <tr><td>스스로 돌아다니기</td><td>끄면 시키는 동작만 해요.</td></tr>
+            <tr><td>마우스 커서 바라보기</td><td>가까운 커서를 눈으로 따라가요.</td></tr>
+            <tr><td>요구·생각 풍선</td><td>간식·장난감·쓰다듬기를 조르는 풍선을 켜고 꺼요.</td></tr>
+            <tr><td>시간 알림 · 점심 · 퇴근</td><td>벽시계 풍선과 그 시각.</td></tr>
+            <tr><td>Windows 시작 시 자동 실행</td><td>로그인하면 하나가 스스로 켜져요. <a href="#autostart">자동 실행</a> 참고.</td></tr>
+            <tr><td>바닥으로</td><td>주 모니터 작업 표시줄 위로 데려와요. 집중 모드가 켜져 있었다면 함께 꺼요.</td></tr>
+            <tr><td>클릭 통과</td><td>하나 몸까지 포함해 창 전체가 클릭을 통과시켜요. 되돌리려면 트레이 메뉴의 <em>액션 패널 열기/닫기</em>나 <em>작업 표시줄 위로 데려오기</em>를 눌러요.</td></tr>
+            <tr><td>사용법 가이드</td><td>이 창.</td></tr>
+            <tr><td>종료</td><td>하나를 보내줘요.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="tray">
+        <h2>트레이 메뉴 (작업 표시줄 오른쪽 아이콘 우클릭)</h2>
+        <table>
+          <tbody>
+            <tr><td>액션 패널 열기/닫기 (F2)</td><td>패널을 하나 옆에 띄우거나 닫아요. 클릭 통과도 해제돼요.</td></tr>
+            <tr><td>작업 표시줄 위로 데려오기</td><td>하나를 주 모니터 바닥으로 불러요. 숨어 있거나 못 찾겠을 때 눌러요. 집중 모드는 꺼져요.</td></tr>
+            <tr><td>집중 모드 (방해 금지)</td><td>설정과 같은 스위치.</td></tr>
+            <tr><td>알림 시간 ▸</td><td>시간 알림 켜기/끄기, 점심(11:30~13:00)·퇴근(17:00~19:00) 시각 고르기.</td></tr>
+            <tr><td>Windows 시작 시 자동 실행</td><td>체크하면 로그인할 때 자동으로 켜져요.</td></tr>
+            <tr><td>사용법 가이드</td><td>이 창.</td></tr>
+            <tr><td>하나 보내주기 (종료)</td><td>앱을 끝내요.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="world">
+        <h2>창과 모니터</h2>
+        <ul>
+          <li><strong>창 옆면</strong>은 벽이에요. 걷다가 닿으면 기대고, <strong>창 윗면</strong>은 올라설 수 있는 바닥, <strong>창 아랫면</strong>은 점프할 때 부딪히는 천장이에요.</li>
+          <li><strong>최대화된 창</strong>처럼 하나가 들어갈 틈이 없는 창은 배경으로 쳐요. 그 위에서 평소처럼 지내요.</li>
+          <li>다른 창 <strong>뒤에 가려진 부분</strong>은 없는 것으로 쳐요. 예를 들어 최대화한 메일 창 뒤에서 옆 모니터로 삐져나온 브라우저는 보이는 부분에만 기대요.</li>
+          <li><strong>모니터 사이</strong>: 디스플레이 설정에서 맞닿아 있는 모니터끼리는 걸어서 오가요. 바닥 높이가 달라도 돼요 — 낮으면 걸어 내려가 착지하고, 높으면 뛰어올라 계속 걸어요. 위아래로 쌓인 배치나 떨어진 배치는 드래그로만 옮길 수 있어요.</li>
+          <li>모니터마다 배율(100 / 125 / 150%)이 달라도 각 모니터의 배율에 맞춰 크기가 맞춰져요.</li>
+        </ul>
+      </section>
+
+      <section id="focus">
+        <h2>집중 모드 (방해 금지)</h2>
+        <ul>
+          <li>켜면 즉시 조용해져요. 몸 주변 24px 여유까지 어떤 창과도 겹치지 않는 바닥 자리 중 가장 가까운 곳으로 옮겨 엎드려요.</li>
+          <li>그런 자리가 없으면(창이 화면을 다 덮으면) 잠시 <strong>숨어요</strong>. 0.5초마다 다시 살피고, 빈 자리가 1.5초 이상 유지되면 돌아와요. 돌아올 때 다른 창의 포커스를 뺏지 않아요.</li>
+          <li><strong>끄면</strong> 빈 자리 중 한 곳으로 돌아와요. 숨어 있는 동안에도 끄기는 바로 반영돼요.</li>
+          <li>급하게 부르고 싶으면 트레이의 <em>작업 표시줄 위로 데려오기</em> — 집중 모드를 끄고 바로 불러요.</li>
+        </ul>
+      </section>
+
+      <section id="autostart">
+        <h2>Windows 시작 시 자동 실행</h2>
+        <ul>
+          <li>트레이 메뉴나 설정 탭에서 <strong>Windows 시작 시 자동 실행</strong>을 켜면, 로그인할 때 하나가 스스로 켜져요. 관리자 권한은 필요 없어요(현재 사용자의 시작 프로그램 목록에 등록돼요).</li>
+          <li>등록되는 건 <em>지금 실행 중인 하나의 파일 경로</em>예요. 설치한 하나에서 켜 주세요. 개발 실행 중에 켜면 그 개발용 파일이 등록돼요.</li>
+          <li>Windows 설정 → 앱 → 시작 프로그램에서도 <strong>Hana Forever</strong> 항목으로 보이고, 거기서 꺼도 돼요.</li>
+        </ul>
+      </section>
+
+      <section id="faq">
+        <h2>문제 해결</h2>
+        <dl>
+          <dt>하나가 안 보여요</dt>
+          <dd>집중 모드에서 빈 자리가 없으면 숨어요. 트레이 → <em>작업 표시줄 위로 데려오기</em>를 누르거나 창을 조금 치워 주세요. 다른 모니터 바닥에 있을 수도 있어요.</dd>
+          <dt>클릭이 하나를 그냥 통과해요</dt>
+          <dd><em>클릭 통과</em>를 켠 상태예요. 트레이 → <em>액션 패널 열기/닫기</em> 또는 <em>작업 표시줄 위로 데려오기</em>로 해제돼요.</dd>
+          <dt>화살표 키나 Space가 안 먹어요</dt>
+          <dd>하나를 한 번 클릭해서 포커스를 준 뒤 눌러 주세요. 다른 창을 쓰는 동안엔 키를 가로채지 않아요.</dd>
+          <dt>모니터 사이를 못 건너요</dt>
+          <dd>디스플레이 설정에서 두 모니터가 <strong>옆으로 맞닿아</strong> 있어야 해요. 위아래로 놓였거나 사이가 떨어져 있으면 드래그로 옮겨 주세요.</dd>
+          <dt>아무것도 없는 곳에서 기대고 있어요</dt>
+          <dd>보이지 않는 창(투명 오버레이 등)이 있을 때 생기던 현상이에요. 클릭 통과 오버레이와 투명 창은 이제 무시하지만, 다시 보이면 개발 실행 창의 <code>[hana] lean on …</code> 줄에 어떤 창인지 남아요.</dd>
+          <dt>다른 PC에 설치하기</dt>
+          <dd>설치 파일(<code>Hana Forever_x64-setup.exe</code>)을 실행하면 돼요. Windows 10 이상 64비트, 관리자 권한 불필요. 처음엔 SmartScreen 경고가 뜰 수 있어요 — <em>추가 정보 → 실행</em>. WebView2 런타임이 없으면 설치 중 자동으로 함께 설치돼요(그때만 인터넷 필요).</dd>
+        </dl>
+      </section>
+
+      <section id="keys">
+        <h2>단축키 요약</h2>
+        <table>
+          <tbody>
+            <tr><td><kbd>F2</kbd></td><td>액션 패널 열기/닫기</td></tr>
+            <tr><td><kbd>Space</kbd> · 더블클릭</td><td>점프</td></tr>
+            <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>누르고 있는 동안 걷기</td></tr>
+            <tr><td>우클릭</td><td>액션 패널</td></tr>
+            <tr><td>드래그</td><td>옮기기</td></tr>
+            <tr><td>머리 위에서 문지르기</td><td>쓰다듬기</td></tr>
+            <tr><td><kbd>Esc</kbd></td><td>패널·가이드 창 닫기</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <footer class="guide-foot"><button type="button" id="close">닫기</button><span>Hana Forever 0.1.0</span></footer>
+    </main>
+    <script type="module" src="/src/guide.ts"></script>
+  </body>
+</html>

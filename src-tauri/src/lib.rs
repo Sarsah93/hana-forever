@@ -4,12 +4,13 @@ use std::sync::Mutex;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, Position, State, Wry};
+use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 
 const LUNCH_OPTIONS: [&str; 4] = ["11:30", "12:00", "12:30", "13:00"];
 const LEAVE_OPTIONS: [&str; 5] = ["17:00", "17:30", "18:00", "18:30", "19:00"];
 
-/// Tray check items so the menu can mirror the settings the webview persists.
-struct TrayMenus { reminders: CheckMenuItem<Wry>, focus: CheckMenuItem<Wry>, lunch: Vec<(String, CheckMenuItem<Wry>)>, leave: Vec<(String, CheckMenuItem<Wry>)> }
+/// Tray check items so the menu can mirror the settings the webview persists (and the OS autostart registration).
+struct TrayMenus { reminders: CheckMenuItem<Wry>, focus: CheckMenuItem<Wry>, autostart: CheckMenuItem<Wry>, lunch: Vec<(String, CheckMenuItem<Wry>)>, leave: Vec<(String, CheckMenuItem<Wry>)> }
 type Tray = Mutex<Option<TrayMenus>>;
 
 #[derive(Deserialize)]
@@ -30,18 +31,20 @@ fn set_click_through(window: tauri::Window, enabled: bool) -> Result<(), String>
 fn quit_app(app: AppHandle) { app.exit(0); }
 
 /// Focus mode hides the mascot when no window-free spot exists; showing never steals focus.
+/// Both directions go through ShowWindow directly: tao only issues a ShowWindow when its own visibility flag
+/// changes, so mixing its hide() with a raw show would leave it believing the window is still hidden and
+/// silently skip the next hide().
 #[tauri::command]
 fn set_mascot_visible(window: tauri::Window, visible: bool) -> Result<(), String> {
-    if !visible { return window.hide().map_err(|error| error.to_string()); }
     #[cfg(target_os = "windows")]
     {
-        use windows_sys::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_SHOWNOACTIVATE};
+        use windows_sys::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_HIDE, SW_SHOWNOACTIVATE};
         let hwnd = window.hwnd().map_err(|error| error.to_string())?;
-        unsafe { ShowWindow(hwnd.0 as _, SW_SHOWNOACTIVATE); }
+        unsafe { ShowWindow(hwnd.0 as _, if visible { SW_SHOWNOACTIVATE } else { SW_HIDE }); }
         Ok(())
     }
     #[cfg(not(target_os = "windows"))]
-    { window.show().map_err(|error| error.to_string()) }
+    { if visible { window.show() } else { window.hide() }.map_err(|error| error.to_string()) }
 }
 
 /// Global cursor in physical desktop pixels (only coordinates; nothing about what is under it).
@@ -121,6 +124,43 @@ fn sync_tray(tray: State<Tray>, settings: ReminderSettings) -> Result<(), String
     Ok(())
 }
 
+/// "Run at sign-in" as the OS has it right now (HKCU\...\Run via tauri-plugin-autostart; no admin needed).
+fn autostart_enabled(app: &AppHandle) -> bool { app.autolaunch().is_enabled().unwrap_or(false) }
+
+/// Register/unregister autostart, then mirror the real state into the tray and the mascot window (for the panel).
+fn apply_autostart(app: &AppHandle, enabled: bool) -> Result<bool, String> {
+    let launcher = app.autolaunch();
+    if enabled { launcher.enable() } else { launcher.disable() }.map_err(|error| error.to_string())?;
+    let now = autostart_enabled(app);
+    if let Ok(guard) = app.state::<Tray>().lock() { if let Some(menus) = guard.as_ref() { let _ = menus.autostart.set_checked(now); } }
+    let _ = app.emit_to("main", "hana://autostart", now);
+    Ok(now)
+}
+
+#[tauri::command]
+fn autostart_get(app: AppHandle) -> bool { autostart_enabled(&app) }
+
+#[tauri::command]
+fn autostart_set(app: AppHandle, enabled: bool) -> Result<bool, String> { apply_autostart(&app, enabled) }
+
+/// The usage guide is a normal, resizable window that is pre-declared and hidden; closing it only hides it.
+fn show_guide(app: &AppHandle) -> Result<(), String> {
+    let window = app.get_webview_window("guide").ok_or_else(|| "가이드 창이 없습니다".to_string())?;
+    let _ = window.center();
+    window.show().map_err(|error| error.to_string())?;
+    let _ = window.unminimize();
+    window.set_focus().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn guide_show(app: AppHandle) -> Result<(), String> { show_guide(&app) }
+
+#[tauri::command]
+fn guide_hide(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("guide") { window.hide().map_err(|error| error.to_string())?; }
+    Ok(())
+}
+
 fn focus_main(app: &AppHandle) -> Option<tauri::WebviewWindow> {
     let window = app.get_webview_window("main")?;
     let _ = window.set_ignore_cursor_events(false);
@@ -135,6 +175,8 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let recenter = MenuItem::with_id(app, "recenter", "작업 표시줄 위로 데려오기", true, None::<&str>)?;
     let reminders = CheckMenuItem::with_id(app, "reminders", "시간 알림 (벽시계 풍선)", true, true, None::<&str>)?;
     let focus = CheckMenuItem::with_id(app, "focus", "집중 모드 (방해 금지)", true, false, None::<&str>)?;
+    let autostart = CheckMenuItem::with_id(app, "autostart", "Windows 시작 시 자동 실행", true, autostart_enabled(app), None::<&str>)?;
+    let guide = MenuItem::with_id(app, "guide", "사용법 가이드", true, None::<&str>)?;
     let lunch: Vec<(String, CheckMenuItem<Wry>)> = LUNCH_OPTIONS.iter()
         .map(|value| CheckMenuItem::with_id(app, format!("lunch:{value}"), format!("점심 {value}"), true, *value == "12:00", None::<&str>).map(|item| (value.to_string(), item)))
         .collect::<Result<_, _>>()?;
@@ -151,8 +193,9 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let times = Submenu::with_id_and_items(app, "times", "알림 시간", true, &time_items)?;
     let quit = MenuItem::with_id(app, "quit", "하나 보내주기 (종료)", true, None::<&str>)?;
     let sep3 = PredefinedMenuItem::separator(app)?;
-    let menu = Menu::with_items(app, &[&toggle_panel, &recenter, &focus, &times, &sep3, &quit])?;
-    *app.state::<Tray>().lock().expect("tray state") = Some(TrayMenus { reminders: reminders.clone(), focus: focus.clone(), lunch, leave });
+    let sep4 = PredefinedMenuItem::separator(app)?;
+    let menu = Menu::with_items(app, &[&toggle_panel, &recenter, &focus, &times, &sep3, &autostart, &guide, &sep4, &quit])?;
+    *app.state::<Tray>().lock().expect("tray state") = Some(TrayMenus { reminders: reminders.clone(), focus: focus.clone(), autostart: autostart.clone(), lunch, leave });
 
     TrayIconBuilder::with_id("hana-tray")
         .icon(app.default_window_icon().expect("bundle icon").clone())
@@ -165,6 +208,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 "quit" => app.exit(0),
                 "toggle-panel" => { if let Some(window) = focus_main(app) { let _ = window.emit("hana://toggle-panel", ()); } }
                 "recenter" => { if let Some(window) = focus_main(app) { let _ = window.emit("hana://reset", ()); } }
+                "guide" => { let _ = show_guide(app); }
                 "reminders" => {
                     let checked = app.state::<Tray>().lock().ok().and_then(|g| g.as_ref().and_then(|m| m.reminders.is_checked().ok())).unwrap_or(true);
                     let _ = app.emit_to("main", "hana://settings", serde_json::json!({ "reminders": checked }));
@@ -172,6 +216,10 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 "focus" => {
                     let checked = app.state::<Tray>().lock().ok().and_then(|g| g.as_ref().and_then(|m| m.focus.is_checked().ok())).unwrap_or(false);
                     let _ = app.emit_to("main", "hana://settings", serde_json::json!({ "focus": checked }));
+                }
+                "autostart" => {
+                    let checked = app.state::<Tray>().lock().ok().and_then(|g| g.as_ref().and_then(|m| m.autostart.is_checked().ok())).unwrap_or(false);
+                    let _ = apply_autostart(app, checked);
                 }
                 _ => {
                     if let Some(value) = id.strip_prefix("lunch:") {
@@ -186,31 +234,38 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Alt+F4 / the close button on a helper window only hides it; the mascot window is told when the panel goes.
+fn hide_on_close(app: &AppHandle, label: &str, notify_main: bool) {
+    if let Some(window) = app.get_webview_window(label) {
+        let handle = app.clone();
+        let hide = window.clone();
+        window.on_window_event(move |event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = hide.hide();
+                if notify_main { let _ = handle.emit_to("main", "hana://panel-closed", ()); }
+            }
+        });
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
         .manage(Tray::new(None))
         .invoke_handler(tauri::generate_handler![
             position_mascot, desktop::desktop_scene, set_click_through, quit_app, cursor_position, set_mascot_visible, debug_log,
-            panel_show, panel_hide, panel_move, panel_visible, panel_position, panel_command, panel_state, sync_tray
+            panel_show, panel_hide, panel_move, panel_visible, panel_position, panel_command, panel_state, sync_tray,
+            autostart_get, autostart_set, guide_show, guide_hide
         ])
         .setup(|app| {
             let window = app.get_webview_window("main").expect("main mascot window");
             window.set_always_on_top(true)?;
             window.set_shadow(false)?;
             desktop::suppress_border(&window);
-            if let Some(panel) = app.get_webview_window("panel") {
-                // Alt+F4 on the panel only hides it; the mascot window is told so it can update its state.
-                let handle = app.handle().clone();
-                let hide = panel.clone();
-                panel.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                        api.prevent_close();
-                        let _ = hide.hide();
-                        let _ = handle.emit_to("main", "hana://panel-closed", ());
-                    }
-                });
-            }
+            hide_on_close(app.handle(), "panel", true);
+            hide_on_close(app.handle(), "guide", false);
             build_tray(app.handle())?;
             Ok(())
         })

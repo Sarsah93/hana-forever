@@ -3,8 +3,9 @@ use serde::Serialize;
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Rect { pub left: i32, pub top: i32, pub right: i32, pub bottom: i32 }
+/// A top-level window Hana can touch, front-to-back. `class`/`title` are for the dev log only (what did she lean on?).
 #[derive(Serialize)]
-pub struct Obstacle { pub id: String, #[serde(flatten)] pub rect: Rect }
+pub struct Obstacle { pub id: String, #[serde(flatten)] pub rect: Rect, pub class: String, pub title: String }
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MonitorInfo { pub id: String, pub work_area: Rect, pub scale_factor: f64, pub primary: bool }
@@ -43,7 +44,7 @@ fn current_work_area(window: &tauri::Window, monitors: &[MonitorInfo]) -> Monito
 mod windows_desktop {
     use super::*;
     use std::mem::size_of;
-    use windows_sys::Win32::{Foundation::{HWND, LPARAM, RECT}, Graphics::Dwm::{DwmGetWindowAttribute, DwmSetWindowAttribute, DWMWA_CLOAKED, DWMWA_EXTENDED_FRAME_BOUNDS}, UI::WindowsAndMessaging::{EnumWindows, GetClassNameW, GetWindowLongW, GetWindowRect, GetWindowThreadProcessId, IsIconic, IsWindowVisible, GWL_EXSTYLE, WS_EX_TOOLWINDOW}};
+    use windows_sys::Win32::{Foundation::{HWND, LPARAM, RECT}, Graphics::Dwm::{DwmGetWindowAttribute, DwmSetWindowAttribute, DWMWA_CLOAKED, DWMWA_EXTENDED_FRAME_BOUNDS}, UI::WindowsAndMessaging::{EnumWindows, GetClassNameW, GetLayeredWindowAttributes, GetWindowLongW, GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindowVisible, GWL_EXSTYLE, LWA_ALPHA, WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT}};
 
     struct Enumeration { obstacles: Vec<Obstacle>, process_id: u32, areas: Vec<Rect> }
     unsafe extern "system" fn collect(hwnd: HWND, param: LPARAM) -> i32 {
@@ -51,7 +52,14 @@ mod windows_desktop {
         let mut pid = 0;
         GetWindowThreadProcessId(hwnd, &mut pid);
         if pid == data.process_id || IsWindowVisible(hwnd) == 0 || IsIconic(hwnd) != 0 { return 1; }
-        if GetWindowLongW(hwnd, GWL_EXSTYLE) as u32 & WS_EX_TOOLWINDOW != 0 { return 1; }
+        // Tool windows, click-through overlays (game/voice overlays, capture helpers) and fully transparent layered
+        // windows sit over the desktop without being anything Hana could lean on or stand on.
+        let ex = GetWindowLongW(hwnd, GWL_EXSTYLE) as u32;
+        if ex & (WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT) != 0 { return 1; }
+        if ex & WS_EX_LAYERED != 0 {
+            let (mut key, mut alpha, mut flags) = (0u32, 0u8, 0u32);
+            if GetLayeredWindowAttributes(hwnd, &mut key, &mut alpha, &mut flags) != 0 && flags & LWA_ALPHA != 0 && alpha < 16 { return 1; }
+        }
         let mut class = [0u16; 256];
         let count = GetClassNameW(hwnd, class.as_mut_ptr(), class.len() as i32);
         let name = String::from_utf16_lossy(&class[..count.max(0) as usize]);
@@ -65,7 +73,10 @@ mod windows_desktop {
         if !data.areas.iter().any(|a| bounds.intersects(a)) { return 1; }
         // EnumWindows is top-to-bottom in Z order. Fully occluded windows contribute no hidden faces.
         if data.obstacles.iter().any(|o| o.rect.left <= bounds.left && o.rect.top <= bounds.top && o.rect.right >= bounds.right && o.rect.bottom >= bounds.bottom) { return 1; }
-        data.obstacles.push(Obstacle { id: format!("{:x}", hwnd as usize), rect: bounds });
+        let mut text = [0u16; 128];
+        let n = GetWindowTextW(hwnd, text.as_mut_ptr(), text.len() as i32);
+        let title = String::from_utf16_lossy(&text[..n.max(0) as usize]);
+        data.obstacles.push(Obstacle { id: format!("{:x}", hwnd as usize), rect: bounds, class: name, title });
         1
     }
     pub fn obstacles(areas: Vec<Rect>) -> Result<Vec<Obstacle>, String> {

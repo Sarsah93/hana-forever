@@ -30,6 +30,8 @@ npm run tauri build  # 5. 배포용 설치 파일 (릴리스 빌드: 콘솔 창 
 
 3단계까지는 Rust 없이도 통과합니다. **3단계에서 실패하면 TypeScript 문제, 4~5단계에서 실패하면 Rust/Tauri 환경 문제**입니다.
 
+프런트엔드는 세 페이지(`index.html` 하나 창, `panel.html` 액션 패널, `guide.html` 사용법 가이드)이고, Rust는 `tauri-plugin-autostart`(부팅 시 자동 실행)를 씁니다 — 첫 빌드 때 cargo가 내려받으므로 인터넷이 필요합니다.
+
 ## 산출물 위치
 
 | 항목 | 경로 |

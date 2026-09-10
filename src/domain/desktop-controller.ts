@@ -1,6 +1,6 @@
 import type { Facing } from "./actions";
-import { clipLength, introLength, SIT_LOOK } from "../assets/manifest";
-import { BODY, collisionScene, createMotion, depenetrate, freeFloorSpots, freeSpace, integrateMotion, isClearSpot, monitorAt, wallContact, type DesktopScene, type MotionState, type Obstacle, type Point } from "./motion";
+import { clipLength, frameAt, introLength, outroOf, SIT_LOOK } from "../assets/manifest";
+import { BODY, collisionScene, createMotion, depenetrate, freeFloorSpots, freeSpace, integrateMotion, isClearSpot, monitorAt, wallContact, type DesktopScene, type MonitorInfo, type MotionState, type Obstacle, type Point } from "./motion";
 import { NeedsModel, NEED_LABEL } from "./needs";
 import { GazeTracker } from "./gaze";
 import { DEFAULT_SETTINGS, type HanaSettings, type InteractionKind } from "./settings";
@@ -18,6 +18,15 @@ export const RESTING: ReadonlySet<DesktopAction> = new Set(["idle-stand", "sit",
 export const LYING: ReadonlySet<DesktopAction> = new Set(["lie-front", "lie-down", "smile"]);
 /** Art exists only as a side view; "front" requests resolve to the roomier side. */
 export const SIDE_ONLY: ReadonlySet<DesktopAction> = new Set(["walk", "run", "lean", "sit", "scratch", "lie-front", "lie-down", "recline"]);
+/** Body families. Changing family goes through the poses a dog really passes on the way (see `plan`). */
+export type Family = "standing" | "sitting" | "lying" | "curled" | "air";
+export const FAMILY: Record<DesktopAction, Family> = {
+  "idle-stand": "standing", "stand-up": "standing", walk: "standing", run: "standing", lean: "standing", shake: "standing",
+  jump: "air", fall: "air", land: "air",
+  sit: "sitting", scratch: "sitting",
+  "lie-front": "lying", "lie-down": "lying", recline: "lying", yawn: "lying", smile: "lying",
+  crouch: "curled", lick: "curled"
+};
 export const ACTION_LABEL: Record<DesktopAction, string> = {
   "idle-stand": "서 있기", "stand-up": "두 발 서기", walk: "걷기", run: "빠르게", lean: "기대기", jump: "점프", fall: "낙하", land: "착지",
   sit: "앉기", "lie-front": "엎드리기", "lie-down": "엎드려 쉬기", recline: "뒤돌아 바라보기", shake: "털기", yawn: "하품", scratch: "턱 긁기", crouch: "웅크리고 앉기", lick: "되새김질", smile: "웃기"
@@ -26,13 +35,16 @@ export const SETTING_LABEL: Record<keyof HanaSettings, string> = {
   autonomous: "스스로 돌아다니기", gaze: "마우스 커서 바라보기", needs: "요구·생각 풍선", reminders: "시간 알림", lunch: "점심 시간", leave: "퇴근 시간", panelTracking: "패널 따라가기", focus: "집중 모드(방해 금지)"
 };
 export interface TickContext { now?: number; cursor?: Point; }
-export interface ControllerEvent { type: "need" | "reminder" | "expired" | "petting" | "reaction" | "watch" | "focus"; detail: string; }
+export interface ControllerEvent { type: "need" | "reminder" | "expired" | "petting" | "reaction" | "watch" | "focus" | "lean"; detail: string; }
+/** One pose on the way to a requested pose. `outro` replays the current clip's settle-in backwards (getting up) before moving on. */
+interface Step { action: DesktopAction; facing: Facing; hold: number; outro?: { frames: readonly number[]; durations: readonly number[] }; }
 /** Focus mode keeps to quiet poses: no walking, jumping or bubbles while the user works. */
 const QUIET_CHOICES: readonly (readonly [ActionRequest, number])[] = [["idle-stand", 2], ["rest", 9]];
 /** Weighted free-roam choices. "rest" fans out to REST_POSES; two-leg standing is part of wandering too. */
 const CHOICES: readonly (readonly [ActionRequest, number])[] = [
   ["walk", 30], ["idle-stand", 9], ["jump", 4], ["stand-up", 5], ["rest", 40], ["shake", 4], ["scratch", 4], ["lick", 4]
 ];
+const flip = (facing: Facing): Facing => facing === "right" ? "left" : "right";
 export class DesktopController {
   motion: MotionState;
   scene: DesktopScene;
@@ -44,7 +56,7 @@ export class DesktopController {
   gaze = new GazeTracker();
   /** Which side of the head the thought bubble is drawn on (the roomier one). */
   bubbleSide: "left" | "right" = "right";
-  /** Frame chosen by gaze tracking instead of the clip cycle. */
+  /** Frame chosen by gaze tracking or a getting-up outro instead of the clip cycle. */
   frameOverride?: number;
   petting = false;
   /** Focus mode found no window-free spot: the host hides the mascot window until one appears. */
@@ -66,11 +78,16 @@ export class DesktopController {
   private afterLand?: DesktopAction;
   private sideCheck = 0;
   private manualHold = 0;
-  private hopping = false;
-  private hopSpeed = 0;
   private focusWas = false;
   private focusCheck = 0;
   private clearFor = 0;
+  /** Poses still to pass before `target` (transition choreography); the first entry is the one being shown. */
+  private steps: Step[] = [];
+  private target?: { action: DesktopAction; facing: Facing; age: number };
+  /** Scripted flight from one monitor's floor onto a bridged neighbour's higher floor (see `crossTo`). */
+  private leap?: { x0: number; y0: number; x1: number; y1: number; t: number; duration: number; arc: number };
+  /** A walk interrupted by physics (fell off an edge, leapt to a neighbour) resumes on landing with the time it had left. */
+  private walkLeft?: { action: "walk" | "run"; facing: Facing; budget: number };
   constructor(scene: DesktopScene, private random = Math.random, needs?: NeedsModel) {
     this.rawObstacles = scene.obstacles;
     this.scene = collisionScene(scene); this.motion = createMotion(this.scene);
@@ -81,6 +98,10 @@ export class DesktopController {
   set autonomous(value: boolean) { this.settings.autonomous = value; }
   get bubble() { return this.needs.bubble; }
   get watchingCursor() { return this.watching; }
+  /** Between poses: an intermediate step (getting up, sitting first) is being shown. */
+  get transitioning() { return this.steps.length > 0; }
+  /** Mid-air between two monitors. */
+  get crossing() { return this.leap !== undefined; }
   currentScale() { return monitorAt(this.scene, this.motion.x, this.motion.y).scaleFactor; }
   currentMonitor() { return monitorAt(this.scene, this.motion.x, this.motion.y); }
   headPoint(): Point { const s = this.currentScale(); return { x: this.motion.x, y: this.motion.y - BODY.height * s * .85 }; }
@@ -89,14 +110,16 @@ export class DesktopController {
   holdAutonomy(seconds: number) { this.manualHold = Math.max(this.manualHold, seconds); }
   setScene(scene: DesktopScene) {
     this.rawObstacles = scene.obstacles;
-    this.scene = collisionScene(scene); this.motion = depenetrate(this.motion, this.scene);
+    this.scene = collisionScene(scene);
+    if (!this.leap) this.motion = depenetrate(this.motion, this.scene);
     this.scene.scaleFactor = this.currentScale();
   }
   /** Park Hana on a floor spot instantly (focus mode moves, tray recall). */
   private relocate(spot: { x: number; y: number }, action: DesktopAction = "idle-stand") {
+    this.leap = undefined; this.walkLeft = undefined;
     this.motion = { x: spot.x, y: spot.y, velocityX: 0, velocityY: 0, grounded: true, supportId: "ground" };
     this.scene.scaleFactor = this.currentScale();
-    this.setAction(action, action === "lie-down" || action === "sit" ? this.preferredSide(true) : "front");
+    this.apply(action, action === "lie-down" || action === "sit" ? this.preferredSide(true) : "front");
     this.nextChoice = 4 + this.random() * 6;
   }
   /**
@@ -108,7 +131,7 @@ export class DesktopController {
     const on = this.settings.focus;
     if (on !== this.focusWas) {
       this.focusWas = on;
-      this.stopWatching(); this.petting = false; this.smileIn = -1; this.afterLand = undefined; this.hopping = false;
+      this.stopWatching(); this.petting = false; this.smileIn = -1; this.afterLand = undefined;
       this.needs.dismiss();
       const spots = freeFloorSpots(this.scene, this.rawObstacles);
       if (on) {
@@ -144,9 +167,51 @@ export class DesktopController {
     this.hidden = false; this.clearFor = 0;
     this.relocate(best, "lie-down");
   }
-  setAction(action: DesktopAction, facing: Facing = this.facing, age = 0) {
+  /** Switch pose right now, dropping any transition in progress. Physics (jump, fall, land) and teleports use this. */
+  private apply(action: DesktopAction, facing: Facing = this.facing, age = 0) {
     this.action = action; this.facing = facing; this.age = age; this.launched = false;
+    this.steps = []; this.target = undefined;
     if (action !== "sit") this.frameOverride = undefined;
+  }
+  /**
+   * Poses between two families, so Hana visibly gets up or settles instead of cutting:
+   * a curled/head-down pose first replays its settle-in backwards (real getting-up art), and lying ↔ upright
+   * passes through sitting. Same-family changes and anything airborne switch directly (the renderer dissolves).
+   */
+  private plan(from: DesktopAction, to: DesktopAction, facing: Facing): Step[] {
+    if (from === to) return [];
+    const a = FAMILY[from], b = FAMILY[to];
+    if (a === "air" || b === "air") return [];
+    const steps: Step[] = [];
+    const outro = a === "curled" && b === "curled" ? undefined : outroOf(from);
+    if (outro) steps.push({ action: from, facing: this.facing, hold: 0, outro });
+    if (a !== b) {
+      const side = facing !== "front" ? facing : this.facing !== "front" ? this.facing : this.preferredSide();
+      if (a === "lying" && b !== "sitting") steps.push({ action: "sit", facing: side, hold: .4 });
+      else if (b === "lying" && a !== "sitting") steps.push({ action: "sit", facing: side, hold: .35 });
+    }
+    return steps;
+  }
+  /** Request a pose; intermediate poses from `plan` are shown first, then `action` starts at `age`. */
+  setAction(action: DesktopAction, facing: Facing = this.facing, age = 0) {
+    const steps = this.plan(this.action, action, facing);
+    if (!steps.length) { this.apply(action, facing, age); return; }
+    const first = steps[0];
+    if (first.outro) { this.age = 0; this.launched = false; this.frameOverride = first.outro.frames[0]; }
+    else this.apply(first.action, first.facing);
+    this.steps = steps; this.target = { action, facing, age };
+  }
+  private advanceTransition() {
+    const step = this.steps[0];
+    if (!step) return;
+    const length = step.outro ? step.outro.durations.reduce((a, b) => a + b, 0) / 1000 : step.hold;
+    if (step.outro) this.frameOverride = frameAt(step.outro.frames, step.outro.durations, this.age);
+    if (this.age < length) return;
+    const rest = this.steps.slice(1), target = this.target;
+    this.frameOverride = undefined;
+    if (rest.length) { this.apply(rest[0].action, rest[0].facing); this.steps = rest; this.target = target; }
+    else if (target) this.apply(target.action, target.facing, target.age);
+    else this.steps = [];
   }
   /** Curl up / lick: start already curled when she is curled, otherwise settle first. */
   private curl(action: "crouch" | "lick") {
@@ -159,6 +224,7 @@ export class DesktopController {
     let r = this.random() * total, pick: DesktopAction = "lie-front";
     for (const [a, w] of REST_POSES) { r -= w; if (r <= 0) { pick = a; break; } }
     if (pick === this.action) pick = pick === "lie-front" ? "lie-down" : "lie-front";
+    this.walkLeft = undefined;
     if (pick === "crouch") this.curl("crouch");
     else this.setAction(pick, SIDE_ONLY.has(pick) || pick === "yawn" ? this.preferredSide(true) : "front");
     this.nextChoice = ONE_SHOT.has(pick) ? Infinity : 6 + this.random() * 8;
@@ -175,26 +241,37 @@ export class DesktopController {
     if (!this.motion.grounded && action !== "fall") return false;
     if (action === "lean" && (facing === "front" || !wallContact(this.motion, this.scene, facing))) return false;
     if (this.action === "jump") return false;
-    this.turnAfterLean = false; this.stopWatching(); this.smileIn = -1; this.petting = false; this.petTimer = 0; this.afterLand = undefined;
+    this.turnAfterLean = false; this.stopWatching(); this.smileIn = -1; this.petting = false; this.petTimer = 0; this.afterLand = undefined; this.walkLeft = undefined;
     if (action === "crouch" || action === "lick") this.curl(action);
     else this.setAction(action, SIDE_ONLY.has(action) && facing === "front" ? this.preferredSide() : facing);
     if (action === "jump") this.motion.velocityX = 0;
+    if (action === "lean") this.reportLean(wallContact(this.motion, this.scene, this.facing as "left" | "right")?.id);
     return true;
   }
+  /** Arrow key released: stop walking now and do not pick the walk back up after a fall. */
+  stopWalking() {
+    this.walkLeft = undefined;
+    if (this.action === "walk" || this.action === "run") this.request("idle-stand");
+  }
   drop(x: number, y: number) {
-    this.stopWatching(); this.petting = false; this.smileIn = -1; this.afterLand = undefined;
+    this.stopWatching(); this.petting = false; this.smileIn = -1; this.afterLand = undefined; this.leap = undefined; this.walkLeft = undefined;
     this.motion = depenetrate({ x, y, velocityX: 0, velocityY: 0, grounded: false }, this.scene);
     this.scene.scaleFactor = this.currentScale();
-    this.setAction(this.motion.grounded ? "land" : "fall");
+    this.apply(this.motion.grounded ? "land" : "fall");
   }
-  reset() { this.stopWatching(); this.petting = false; this.smileIn = -1; this.motion = createMotion(this.scene); this.scene.scaleFactor = this.currentScale(); this.setAction("idle-stand", "front"); }
+  /** Tray "bring her back": spawn spot on the primary monitor, visible again even if focus mode had hidden her. */
+  reset() {
+    this.stopWatching(); this.petting = false; this.smileIn = -1; this.leap = undefined; this.walkLeft = undefined;
+    this.hidden = false; this.focusWas = this.settings.focus; this.clearFor = 0; this.focusCheck = 0;
+    this.motion = createMotion(this.scene); this.scene.scaleFactor = this.currentScale(); this.apply("idle-stand", "front");
+  }
   /** Hover-petting over the head. Hana settles down and smiles while it lasts, and for a moment after. */
   setPetting(on: boolean) {
     if (on === this.petting) return;
     if (on && !this.motion.grounded) return;
     this.petting = on;
     if (on) {
-      this.stopWatching(); this.afterLand = undefined;
+      this.stopWatching(); this.afterLand = undefined; this.walkLeft = undefined;
       const wanted = this.needs.satisfy("pet");
       this.events.push({ type: "petting", detail: wanted ? "wanted" : "ok" });
       if (this.action === "smile") return;
@@ -207,7 +284,7 @@ export class DesktopController {
     if (kind === "talk") return "말 걸기는 준비 중이에요.";
     if (!this.motion.grounded || this.action === "jump") return "착지한 뒤 다시 해볼게요.";
     if (kind === "pet") { this.setPetting(true); this.petTimer = 4; return "머리를 쓰다듬는 중…"; }
-    this.stopWatching(); this.petting = false; this.smileIn = -1;
+    this.stopWatching(); this.petting = false; this.smileIn = -1; this.walkLeft = undefined;
     if (kind === "snack") {
       const wanted = this.needs.satisfy("snack");
       this.curl("lick"); this.events.push({ type: "reaction", detail: "snack" });
@@ -218,6 +295,11 @@ export class DesktopController {
     return wanted ? "놀자! 신나서 폴짝" : "폴짝 · 후다닥";
   }
   private stopWatching() { this.watching = false; this.frameOverride = undefined; }
+  /** What she is leaning on, for the dev log: an invisible "wall" shows up here with its window class and title. */
+  private reportLean(id?: string) {
+    const o = id ? this.scene.obstacles.find(o => o.id === id) : undefined;
+    if (o) this.events.push({ type: "lean", detail: `${o.id} ${o.class ?? "?"} "${o.title ?? ""}" [${o.left},${o.top}-${o.right},${o.bottom}] feet=${Math.round(this.motion.x)},${Math.round(this.motion.y)} side=${this.facing}` });
+  }
   private chooseBubbleSide(force = false) {
     const left = freeSpace(this.motion, this.scene, "left"), right = freeSpace(this.motion, this.scene, "right");
     if (force) this.bubbleSide = left >= right ? "left" : "right";
@@ -229,13 +311,14 @@ export class DesktopController {
     const g = this.gaze.update(cursor, this.headPoint(), scale, dt);
     if (!g) return;
     const canStart = (this.action === "idle-stand" || this.action === "lie-front" || this.action === "lie-down") && this.motion.grounded
-      && !this.needs.active && !this.petting && this.smileIn < 0;
+      && !this.needs.active && !this.petting && this.smileIn < 0 && !this.transitioning;
     if (!this.watching && canStart && g.near && this.gaze.activeFor > .5 && this.random() < dt * .6) {
       this.watching = true; this.watchAge = 0; this.watchUntil = 6 + this.random() * 8;
       this.setAction("sit", g.side); this.events.push({ type: "watch", detail: g.side });
     }
     if (!this.watching) return;
-    if (this.action !== "sit") { this.stopWatching(); return; }
+    if (this.action !== "sit" && !this.transitioning) { this.stopWatching(); return; }
+    if (this.action !== "sit") return;
     this.watchAge += dt;
     if (g.side !== this.facing) this.facing = g.side;
     this.frameOverride = g.up ? SIT_LOOK.up : Math.floor(this.age * .5) % 2 ? SIT_LOOK.levelAlt : SIT_LOOK.level;
@@ -250,6 +333,7 @@ export class DesktopController {
     const total = table.reduce((a, [, w]) => a + w, 0);
     let r = this.random() * total, pick: ActionRequest = this.settings.focus ? "rest" : "walk";
     for (const [a, w] of table) { r -= w; if (r <= 0) { pick = a; break; } }
+    this.walkLeft = undefined;
     if (pick === "lick") { if (this.action === "crouch") { this.curl("lick"); this.nextChoice = Infinity; return; } pick = "rest"; }
     if (pick === "rest") { this.lastRest = this.rest(); return; }
     this.lastRest = undefined;
@@ -258,19 +342,46 @@ export class DesktopController {
     this.setAction(pick, SIDE_ONLY.has(pick) ? this.preferredSide(true) : "front");
     this.nextChoice = ONE_SHOT.has(pick) ? Infinity : pick === "idle-stand" ? 2.5 + this.random() * 3 : pick === "stand-up" ? 2 + this.random() * 2.5 : 6 + this.random() * 8;
   }
+  private rememberWalk() {
+    if (this.action === "walk" || this.action === "run") this.walkLeft = { action: this.action, facing: this.facing, budget: Math.max(1, this.nextChoice - this.age) };
+  }
+  /**
+   * Scripted leap from the current floor onto a bridged neighbour's higher floor: an arc that lands a body's
+   * width inside the neighbour, then the walk carries on. Any rise is fine — the only rule is that a real
+   * side-by-side seam exists (`bridgedNeighbour`); outer edges still turn her around.
+   */
+  private crossTo(n: MonitorInfo, rise: number) {
+    const s = this.currentScale(), inward = (BODY.halfWidth + 20) * n.scaleFactor;
+    const x1 = this.facing === "left" ? n.workArea.right - inward : n.workArea.left + inward;
+    this.rememberWalk();
+    this.leap = { x0: this.motion.x, y0: this.motion.y, x1, y1: n.workArea.bottom, t: 0, duration: Math.min(.9, .25 + rise / 800), arc: Math.max(14 * s, rise * .2) };
+    this.apply("jump", this.facing); this.launched = true;
+  }
+  private advanceLeap(dt: number) {
+    const L = this.leap!; L.t += dt;
+    const u = Math.min(1, L.t / L.duration), dy = L.y1 - L.y0;
+    const y = L.y0 + dy * u - L.arc * 4 * u * (1 - u);
+    const vy = (dy - L.arc * 4 * (1 - 2 * u)) / L.duration;
+    this.motion = { x: L.x0 + (L.x1 - L.x0) * u, y, velocityX: (L.x1 - L.x0) / L.duration, velocityY: vy, grounded: false, supportId: undefined };
+    if (u < 1) return;
+    this.leap = undefined;
+    this.motion = { x: L.x1, y: L.y1, velocityX: 0, velocityY: 0, grounded: true, supportId: "ground" };
+    this.scene.scaleFactor = this.currentScale();
+    this.apply("land");
+  }
   tick(dt: number, ctx: TickContext = {}) {
     this.enforceFocus(dt);
     if (this.hidden) return;
     this.age += dt;
     const scale = this.currentScale(); this.scene.scaleFactor = scale;
+    if (this.leap) { this.advanceLeap(dt); return; }
+    if (this.steps.length) this.advanceTransition();
     if (this.action === "lean") {
       const contact = this.facing !== "front" && wallContact(this.motion, this.scene, this.facing);
-      if (!this.motion.grounded || !contact) this.setAction(this.motion.grounded ? "idle-stand" : "fall");
-      else if (this.age > 1.8 && this.turnAfterLean) {
-        this.setAction("walk", this.facing === "right" ? "left" : "right"); this.turnAfterLean = false;
-      }
+      if (!this.motion.grounded || !contact) this.apply(this.motion.grounded ? "idle-stand" : "fall");
+      else if (this.age > 1.8 && this.turnAfterLean) { this.apply("walk", flip(this.facing)); this.turnAfterLean = false; }
     }
-    if (ONE_SHOT.has(this.action) && this.age * 1000 >= clipLength(this.action)) {
+    if (!this.transitioning && ONE_SHOT.has(this.action) && this.age * 1000 >= clipLength(this.action)) {
       if (this.action === "lick") { this.curl("crouch"); this.nextChoice = 4 + this.random() * 6; }
       else { this.setAction("idle-stand", "front"); this.nextChoice = 1 + this.random() * 2; }
     }
@@ -283,37 +394,29 @@ export class DesktopController {
     if (this.manualHold > 0) this.manualHold -= dt;
     let launch = false;
     if (this.action === "jump" && !this.launched && this.age >= 0.12) { launch = true; this.launched = true; }
-    const speed = this.hopping && this.action !== "land" ? this.hopSpeed : this.action === "walk" ? 95 : this.action === "run" ? 190 : 0;
+    const gait = this.action === "walk" || this.action === "run";
+    const speed = this.action === "walk" ? 95 : this.action === "run" ? 190 : 0;
     const result = integrateMotion(this.motion, this.scene, this.facing === "left" ? -speed : this.facing === "right" ? speed : 0, dt, launch);
     this.motion = result.state;
-    // A neighbouring monitor whose floor is a little higher (its taskbar, or a taller screen): hop up and keep walking.
-    if (result.stepUp !== undefined && !this.hopping && this.motion.grounded && (this.action === "walk" || this.action === "run") && result.stepUp <= 90 * scale) {
-      const g = 1450 * scale, rise = result.stepUp + 14 * scale;
-      const flight = Math.sqrt(2 * rise / g) + Math.sqrt(2 * 14 * scale / g);
-      this.hopping = true; this.launched = true;
-      this.hopSpeed = Math.max(95, (BODY.halfWidth + 34) / flight);
-      this.motion = { ...this.motion, grounded: false, supportId: undefined, velocityY: -Math.sqrt(2 * g * rise),
-        velocityX: (this.facing === "left" ? -1 : 1) * this.hopSpeed * scale };
-      this.setAction("jump", this.facing);
-      return;
-    }
-    if (result.landed) this.setAction("land");
-    else if (!this.motion.grounded && this.motion.velocityY >= 0 && this.action !== "fall") this.setAction("fall");
-    else if (result.contact && this.motion.grounded && (this.action === "walk" || this.action === "run")) {
-      if (wallContact(this.motion, this.scene, result.contact.side)) { this.setAction("lean", result.contact.side); this.turnAfterLean = true; }
-      else this.setAction("walk", this.facing === "right" ? "left" : "right");
-    } else if (result.boundary && (this.action === "walk" || this.action === "run")) this.setAction(this.action, this.facing === "right" ? "left" : "right");
-    if (this.action === "land" && (this.age >= 0.22 || this.hopping)) {
-      if (this.hopping) { this.hopping = false; this.setAction("walk", this.facing); }
+    // A bridged neighbour with a higher floor (its taskbar, or a taller/lower-placed screen): leap up and keep walking.
+    if (result.neighbour && result.stepUp !== undefined && this.motion.grounded && gait) { this.crossTo(result.neighbour, result.stepUp); return; }
+    if (result.landed) this.apply("land");
+    else if (!this.motion.grounded && this.motion.velocityY >= 0 && this.action !== "fall") { this.rememberWalk(); this.apply("fall"); }
+    else if (result.contact && this.motion.grounded && gait) {
+      if (wallContact(this.motion, this.scene, result.contact.side)) { this.apply("lean", result.contact.side); this.turnAfterLean = true; this.reportLean(result.contact.id); }
+      else this.apply(this.action, flip(this.facing));
+    } else if (result.boundary && gait) this.apply(this.action, flip(this.facing));
+    if (this.action === "land" && this.age >= 0.22) {
+      const resume = this.walkLeft; this.walkLeft = undefined;
+      if (resume) { this.apply(resume.action, resume.facing); this.nextChoice = resume.budget; }
       else if (this.afterLand) { this.setAction(this.afterLand, "front"); this.afterLand = undefined; }
       else this.setAction("idle-stand", "front");
     }
-    if (this.hopping && this.motion.grounded && this.action !== "land" && this.action !== "walk") this.hopping = false;
     const needSettings = this.settings.focus ? { ...this.settings, needs: false } : this.settings;
     for (const e of this.needs.tick(dt, ctx.now ?? Date.now(), needSettings)) {
       if (e.type === "need") {
         this.chooseBubbleSide(true); this.events.push({ type: "need", detail: NEED_LABEL[e.kind] });
-        if (this.motion.grounded && this.action !== "jump" && !this.petting) { this.stopWatching(); this.setAction("stand-up", "front"); }
+        if (this.motion.grounded && this.action !== "jump" && !this.petting) { this.stopWatching(); this.walkLeft = undefined; this.setAction("stand-up", "front"); }
       } else if (e.type === "reminder") { this.chooseBubbleSide(true); this.events.push({ type: "reminder", detail: e.label }); }
       else if (e.type === "expired") {
         this.events.push({ type: "expired", detail: e.kind });
@@ -322,10 +425,11 @@ export class DesktopController {
     }
     if (this.needs.bubble && (this.sideCheck += dt) > .5) { this.sideCheck = 0; this.chooseBubbleSide(); }
     // A request that arrived mid-clip is picked up as soon as she is idle again.
-    if (this.needs.active && this.action === "idle-stand" && this.motion.grounded && !this.petting) this.setAction("stand-up", "front");
+    if (this.needs.active && this.action === "idle-stand" && this.motion.grounded && !this.petting && !this.transitioning) this.setAction("stand-up", "front");
     this.updateGaze(this.settings.focus ? undefined : ctx.cursor, dt, scale);
-    const idleEnough = this.action === "idle-stand" || this.action === "walk" || this.action === "run" || (RESTING.has(this.action) && this.action !== "stand-up") || this.action === "stand-up";
-    if (this.settings.autonomous && this.manualHold <= 0 && this.motion.grounded && idleEnough && !this.needs.active && !this.petting && !this.watching && this.smileIn < 0 && this.age > this.nextChoice) {
+    const idleEnough = this.action === "idle-stand" || gait || RESTING.has(this.action);
+    if (this.settings.autonomous && this.manualHold <= 0 && this.motion.grounded && idleEnough && !this.transitioning
+      && !this.needs.active && !this.petting && !this.watching && this.smileIn < 0 && this.age > this.nextChoice) {
       this.choose();
     }
   }

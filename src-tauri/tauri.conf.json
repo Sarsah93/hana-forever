@@ -37,6 +37,18 @@
         "visible": false,
         "shadow": true,
         "focus": false
+      },
+      {
+        "label": "guide",
+        "url": "guide.html",
+        "title": "하나 · 사용법 가이드",
+        "width": 660,
+        "height": 740,
+        "minWidth": 480,
+        "minHeight": 420,
+        "resizable": true,
+        "visible": false,
+        "center": true
       }
     ]
   },

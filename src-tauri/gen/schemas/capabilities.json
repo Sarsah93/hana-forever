@@ -1,1 +1,1 @@
-{"default":{"identifier":"default","description":"Mascot window and its action panel window.","local":true,"windows":["main","panel"],"permissions":["core:default","core:window:allow-start-dragging"]}}
+{"default":{"identifier":"default","description":"Mascot window, its action panel window and the usage guide window.","local":true,"windows":["main","panel","guide"],"permissions":["core:default","core:window:allow-start-dragging"]}}

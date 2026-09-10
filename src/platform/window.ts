@@ -25,6 +25,11 @@ export interface WindowBridge {
   panelPosition(): Promise<Point | undefined>;
   panelState(state: PanelState): Promise<void>;
   syncTray(settings: HanaSettings): Promise<void>;
+  /** Windows "run at sign-in" registration; undefined outside the native app. */
+  autostart(): Promise<boolean | undefined>;
+  setAutostart(enabled: boolean): Promise<boolean | undefined>;
+  /** Open the usage guide window. */
+  guideShow(): Promise<void>;
 }
 /** Browser preview: two side-by-side "monitors" — the right one has no taskbar, so its floor is lower. */
 export function previewScene(): DesktopScene {
@@ -86,6 +91,9 @@ export function getWindowBridge(onError: (error: unknown) => void): WindowBridge
       const p = await invoke<[number, number] | null>("panel_position"); return p ? { x: p[0], y: p[1] } : undefined;
     },
     async panelState(state) { if (inTauri()) await invoke("panel_state", { state }); },
-    async syncTray(settings) { if (inTauri()) await invoke("sync_tray", { settings: { lunch: settings.lunch, leave: settings.leave, reminders: settings.reminders, focus: settings.focus } }); }
+    async syncTray(settings) { if (inTauri()) await invoke("sync_tray", { settings: { lunch: settings.lunch, leave: settings.leave, reminders: settings.reminders, focus: settings.focus } }); },
+    async autostart() { return inTauri() ? invoke<boolean>("autostart_get") : undefined; },
+    async setAutostart(enabled) { return inTauri() ? invoke<boolean>("autostart_set", { enabled }) : undefined; },
+    async guideShow() { if (inTauri()) await invoke("guide_show"); }
   };
 }
