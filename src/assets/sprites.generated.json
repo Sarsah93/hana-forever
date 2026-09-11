@@ -1,0 +1,20 @@
+{
+  "sprites": [
+    {
+      "action": "idle-stand",
+      "facing": "front",
+      "src": "/idle-stand/front-v1.png",
+      "frameCount": 1,
+      "fps": 1,
+      "anchor": { "x": 0.5, "y": 0.9463 }
+    },
+    {
+      "action": "stand-up",
+      "facing": "front",
+      "src": "/stand-up/front-v1.png",
+      "frameCount": 1,
+      "fps": 1,
+      "anchor": { "x": 0.5, "y": 0.9463 }
+    }
+  ]
+}

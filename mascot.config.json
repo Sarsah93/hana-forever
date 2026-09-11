@@ -1,0 +1,13 @@
+{
+  "$comment": "이 파일 하나로 마스코트의 정체성이 결정됩니다. 강아지를 바꾸려면 여기를 고치고 tools/mascot-kit 파이프라인을 돌리세요.",
+  "mascotName": "하나",
+  "appName": "Hana Forever",
+  "identifier": "com.hanaforever.desktop",
+  "tagline": "아기 같은 우리 하나가 내 영원한 동반자가 되었으면 하는 바램으로",
+  "appearance": {
+    "breed": "brown toy poodle",
+    "coat": "reddish-brown curly fur",
+    "features": "round dark eyes, black nose, floppy curly ears, slender toy-poodle build",
+    "exclude": "no harness, no collar, no blanket, no human hands"
+  }
+}

@@ -1,6 +1,21 @@
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
+use serde::Deserialize;
 use tauri::{Emitter, Manager, PhysicalPosition, Position};
+
+/// Identity lives in one file at the repo root so swapping the mascot never means
+/// hunting for hardcoded names. Parsed once at startup from the compiled-in copy.
+#[derive(Deserialize)]
+struct MascotConfig {
+    #[serde(rename = "mascotName")]
+    mascot_name: String,
+    #[serde(rename = "appName")]
+    app_name: String,
+}
+
+fn mascot_config() -> MascotConfig {
+    serde_json::from_str(include_str!("../../mascot.config.json")).expect("mascot.config.json")
+}
 
 #[tauri::command]
 fn move_mascot_by(window: tauri::Window, dx: i32, dy: i32) -> Result<(), String> {
@@ -22,14 +37,16 @@ fn quit_app(app: tauri::AppHandle) {
 /// The mascot window has no decorations and is kept out of the taskbar, so the tray
 /// icon is the only always-available way to reach it. Keep it minimal but complete.
 fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
+    let config = mascot_config();
     let toggle_panel = MenuItem::with_id(app, "toggle-panel", "행동 패널 열기/닫기 (F2)", true, None::<&str>)?;
     let recenter = MenuItem::with_id(app, "recenter", "화면 중앙으로 데려오기", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "하나 보내주기 (종료)", true, None::<&str>)?;
+    let quit_label = format!("{} 보내주기 (종료)", config.mascot_name);
+    let quit = MenuItem::with_id(app, "quit", quit_label, true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&toggle_panel, &recenter, &quit])?;
 
-    TrayIconBuilder::with_id("hana-tray")
+    TrayIconBuilder::with_id("mascot-tray")
         .icon(app.default_window_icon().expect("bundle icon").clone())
-        .tooltip("Hana Forever")
+        .tooltip(&config.app_name)
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
@@ -62,5 +79,5 @@ pub fn run() {
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("error while running Hana Forever");
+        .expect("error while running the mascot app");
 }

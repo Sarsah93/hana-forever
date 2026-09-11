@@ -4,6 +4,7 @@ import { MascotMachine } from "./domain/mascot-machine";
 import { integrateMotion, type MotionState } from "./domain/motion";
 import { findSprite } from "./assets/manifest";
 import { getWindowBridge } from "./platform/window";
+import mascot from "../mascot.config.json";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 const machine = new MascotMachine();
@@ -12,18 +13,20 @@ let motion: MotionState = { x: 0, y: 0, velocityX: 0, velocityY: 0 };
 let last = performance.now();
 let clickThrough = false;
 
+const name = mascot.mascotName;
+
 app.innerHTML = `
-  <section class="mascot" aria-label="하나 데스크톱 마스코트">
+  <section class="mascot" aria-label="${name} 데스크톱 마스코트">
     <div class="sprite-stage" id="sprite-stage">
-      <img class="sprite-image" id="mascot-image" alt="두 발로 서서 앞발을 내민 하나" hidden />
+      <img class="sprite-image" id="mascot-image" alt="${name}" hidden />
       <div class="placeholder-pup" aria-hidden="true">🐩</div>
-      <p id="missing-asset">첫 스프라이트를 기다리는 하나</p>
+      <p id="missing-asset">첫 스프라이트를 기다리는 ${name}</p>
     </div>
-    <button class="handle" id="drag-handle" aria-label="하나 이동하기">하나</button>
+    <button class="handle" id="drag-handle" aria-label="${name} 이동하기">${name}</button>
   </section>
   <aside class="control-panel" id="control-panel" aria-label="행동 선택 패널" hidden>
     <div class="title-row">
-      <strong>HANA</strong>
+      <strong>${name}</strong>
       <span class="title-buttons">
         <button id="click-through">클릭 통과: 끔</button>
         <button id="quit">종료</button>

@@ -1,0 +1,19 @@
+{
+  "$comment": "각 포즈의 생성 지시. {breed}, {coat}, {features}, {exclude}는 mascot.config.json의 appearance에서 채워집니다.",
+  "poses": [
+    {
+      "action": "idle-stand",
+      "facing": "front",
+      "label": "네 발로 서서 정면 보기",
+      "sourceHint": "full-body",
+      "prompt": "Use case: identity-preserve. Asset type: transparent desktop mascot sprite, idle-stand/front key pose. Primary request: create a single clean, full-body cutout of the same {breed}, standing squarely on all four legs and facing the viewer with the head lifted slightly; preserve {features} and {coat}. Scene/backdrop: genuinely transparent background. Composition/framing: centered subject, generous transparent margins, all four paws and both ears fully visible, feet aligned near the bottom. Lighting/mood: soft natural indoor light. Constraints: change only background and production cleanup; preserve the dog's identity and pose; {exclude}; no floor, no shadow, no text, no watermark."
+    },
+    {
+      "action": "stand-up",
+      "facing": "front",
+      "label": "두 발로 서서 앞발 내밀기",
+      "sourceHint": "full-body",
+      "prompt": "Use case: identity-preserve. Asset type: transparent desktop mascot sprite, stand-up/front key pose. Primary request: create a single clean, full-body cutout of the same {breed}, upright on the hind legs facing the viewer, with both front paws gently extended toward the screen; preserve {features} and {coat}. Scene/backdrop: genuinely transparent background. Composition/framing: centered subject, generous transparent margins, paws and ears fully visible, feet aligned near the bottom. Lighting/mood: soft natural indoor light. Constraints: change only background and production cleanup; preserve the dog's identity and pose; {exclude}; no floor, no shadow, no text, no watermark."
+    }
+  ]
+}

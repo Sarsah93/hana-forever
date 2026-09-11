@@ -24,6 +24,8 @@ npm run tauri build
 
 실제 마스코트 렌더링에는 `assets/sprites/README.md`의 규격에 맞춘 투명 스프라이트가 필요합니다. 프레임 작업이 완료되면 `src/assets/manifest.ts`에만 등록하면 됩니다.
 
+다른 강아지로 바꾸려면 사진 폴더와 `mascot.config.json` 만 준비하면 됩니다. [tools/mascot-kit/README.md](tools/mascot-kit/README.md)를 참고하세요.
+
 빌드 사전 준비물과 단계별 확인 방법은 [docs/BUILD.md](docs/BUILD.md)에 정리되어 있습니다. Rust를 설치하지 않았다면 GitHub Actions의 `build` 워크플로가 만든 설치 파일을 내려받아 확인할 수 있습니다.
 
 더 자세한 확장 구조와 다음 단계는 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)를 참고하세요.
